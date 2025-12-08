@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import { Vector2, Vector3, Raycaster, Mesh, Plane } from 'three';
 import * as THREE from 'three';
 
@@ -25,6 +26,7 @@ export function CueStick({ onBallHit }: CueStickProps) {
 
   const cueRef = useRef<Mesh>(null);
   const maxCharge = 2000; // 최대 차징 시간 (ms)
+  const [power, setPower] = useState(0);
 
   useFrame((state) => {
     if (!cueRef.current || !selectedBall) return;
@@ -52,6 +54,17 @@ export function CueStick({ onBallHit }: CueStickProps) {
     cueRef.current.lookAt(ballPos);
 
     cueDirectionRef.current.copy(direction);
+
+    // 파워 게이지 업데이트
+    if (isCharging) {
+      const pct = Math.min((Date.now() - chargeStartRef.current) / maxCharge, 1);
+      const scaled = Math.round(1 + pct * 99);
+      if (scaled !== power) {
+        setPower(scaled);
+      }
+    } else if (power !== 0) {
+      setPower(0);
+    }
   });
 
   const pickBall = (clientX: number, clientY: number) => {
@@ -177,6 +190,53 @@ export function CueStick({ onBallHit }: CueStickProps) {
             <meshStandardMaterial color="#8B4513" roughness={0.6} />
           </mesh>
         </group>
+      )}
+
+      {/* 파워 게이지 (Space로 충전 중일 때만 표시) */}
+      {selectedBall && isCharging && (
+        <Html center style={{ pointerEvents: 'none' }}>
+          <div
+            style={{
+              marginTop: '-48px',
+              padding: '6px 10px',
+              background: 'rgba(0, 0, 0, 0.65)',
+              borderRadius: '8px',
+              minWidth: '140px',
+              color: '#f7f7f7',
+              fontSize: '12px',
+              fontFamily: 'Inter, sans-serif',
+              textAlign: 'center',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+            }}
+          >
+            <div style={{ marginBottom: '6px' }}>
+              Power: <strong>{power}</strong> / 100
+            </div>
+            <div
+              style={{
+                width: '100%',
+                height: '8px',
+                background: 'rgba(255,255,255,0.15)',
+                borderRadius: '6px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${power}%`,
+                  height: '100%',
+                  background:
+                    'linear-gradient(90deg, #34d399 0%, #f59e0b 50%, #ef4444 100%)',
+                  transition: 'width 80ms linear',
+                }}
+              />
+            </div>
+            <div style={{ marginTop: '4px', opacity: 0.85 }}>
+              Hold Space to charge
+            </div>
+          </div>
+        </Html>
       )}
 
     </>

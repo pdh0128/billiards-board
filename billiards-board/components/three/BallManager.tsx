@@ -14,7 +14,15 @@ interface TableSize {
   height: number;
 }
 
-export function BallManager({ table }: { table: TableSize }) {
+type ToolMode = 'cue' | 'hand';
+
+interface Props {
+  table: TableSize;
+  toolMode: ToolMode;
+  onReadBall: (ball: Ball) => void;
+}
+
+export function BallManager({ table, toolMode, onReadBall }: Props) {
   const { balls, addBall, removeBall } = useArticles();
   const socket = useSocket();
   const [newBallIds, setNewBallIds] = useState<Set<string>>(new Set());
@@ -132,12 +140,14 @@ export function BallManager({ table }: { table: TableSize }) {
         <BallComponent
           key={ball.id}
           ball={ball}
-          isNew={newBallIds.has(ball.id)}
-          table={table}
-          registerController={registerController}
-        />
-      ))}
-      <CueStick onBallHit={handleBallHit} />
+      isNew={newBallIds.has(ball.id)}
+      table={table}
+      registerController={registerController}
+      toolMode={toolMode}
+      onReadBall={onReadBall}
+    />
+  ))}
+      {toolMode === 'cue' && <CueStick onBallHit={handleBallHit} />}
     </>
   );
 }

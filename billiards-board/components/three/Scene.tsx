@@ -3,15 +3,47 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { BallManager } from './BallManager';
+import { useEffect, useState } from 'react';
+import { ToolSelector } from '../game/tool-selector';
+import { Ball } from '@/types';
 
 export function Scene() {
   // 당구대 크기 (4배 확대)
   const TABLE_WIDTH = 80;
   const TABLE_DEPTH = 48;
   const TABLE_HEIGHT = 1;
+  const [toolMode, setToolMode] = useState<'cue' | 'hand'>('cue');
+  const [selectedContent, setSelectedContent] = useState<Ball | null>(null);
+
+  useEffect(() => {
+    if (toolMode !== 'hand') {
+      setSelectedContent(null);
+    }
+  }, [toolMode]);
 
   return (
     <div className="w-full h-screen absolute inset-0">
+      <ToolSelector mode={toolMode} onChange={setToolMode} />
+
+      {selectedContent && toolMode === 'hand' && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black/80 text-white border border-white/10 rounded-xl shadow-2xl max-w-xl w-[90%] p-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-sm text-gray-300">
+              {selectedContent.type === 'article' ? '글' : '댓글'}
+            </div>
+            <button
+              className="text-gray-400 hover:text-white text-sm"
+              onClick={() => setSelectedContent(null)}
+            >
+              닫기
+            </button>
+          </div>
+          <div className="text-lg leading-relaxed break-words whitespace-pre-wrap">
+            {selectedContent.content}
+          </div>
+        </div>
+      )}
+
       <Canvas>
         <PerspectiveCamera makeDefault position={[0, 30, 60]} />
         <OrbitControls
@@ -86,7 +118,11 @@ export function Scene() {
         </mesh>
 
         {/* 공 관리자 */}
-        <BallManager table={{ width: TABLE_WIDTH, depth: TABLE_DEPTH, height: TABLE_HEIGHT }} />
+        <BallManager
+          table={{ width: TABLE_WIDTH, depth: TABLE_DEPTH, height: TABLE_HEIGHT }}
+          toolMode={toolMode}
+          onReadBall={(ball) => setSelectedContent(ball)}
+        />
       </Canvas>
     </div>
   );

@@ -11,6 +11,8 @@ interface BallProps {
   isNew?: boolean;
   table: { width: number; depth: number; height: number };
   registerController: (id: string, applyImpulse: (force: Vector3) => void) => () => void;
+  toolMode: 'cue' | 'hand';
+  onReadBall: (ball: BallType) => void;
 }
 
 export function Ball({
@@ -18,6 +20,8 @@ export function Ball({
   isNew = false,
   table,
   registerController,
+  toolMode,
+  onReadBall,
 }: BallProps) {
   const meshRef = useRef<Mesh>(null);
   const velocityRef = useRef(new Vector3(0, 0, 0));
@@ -138,8 +142,9 @@ export function Ball({
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
       onClick={() => {
-        console.log('Clicked ball:', ball);
-        // TODO: 공 클릭 이벤트 처리 (content 표시)
+        if (toolMode === 'hand') {
+          onReadBall(ball);
+        }
       }}
     >
       <sphereGeometry args={[ball.radius, 32, 32]} />

@@ -186,6 +186,38 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     }
   }, []);
 
+  const persistComment = useCallback(async (comment: Ball, parentPath?: string, hitterUserId?: string) => {
+    try {
+      const response = await fetch('/api/comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: comment.content,
+          articleId: comment.articleId,
+          parentPath,
+          position: comment.position,
+          radius: comment.radius,
+          userId: hitterUserId,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.data) {
+        const saved = data.data;
+        return {
+          ...comment,
+          id: saved.id,
+          path: saved.path,
+          depth: saved.depth,
+          createdAt: new Date(saved.createdAt),
+        } as Ball;
+      }
+    } catch (error) {
+      console.error('Failed to persist comment', error);
+    }
+    return comment;
+  }, []);
+
   const handleReadBall = useCallback(
     (ball: Ball) => {
       const articleId = ball.type === 'article' ? ball.id : ball.articleId ?? ball.id;
@@ -213,18 +245,13 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
 
   const pocketRadius = 1.8;
   const spawnCommentFromPocket = useCallback(
-    (pocketed: PhysicsBody) => {
+    async (pocketed: PhysicsBody) => {
       const hitterId = pocketed.lastHitBy;
       if (!hitterId) return;
       const hitter = bodiesRef.current.get(hitterId);
       if (!hitter) return;
 
       const parent = hitter.ball;
-      const parentPath = parent.path ?? '001';
-      const nextSegment = Math.floor(Math.random() * 999)
-        .toString()
-        .padStart(3, '0');
-
       const newBall: Ball = {
         id: `${pocketed.ball.id}-comment-${Date.now()}`,
         type: 'comment',
@@ -240,18 +267,20 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
         createdAt: new Date(),
         isDeleted: false,
         articleId: parent.type === 'article' ? parent.id : parent.articleId ?? parent.id,
-        path: `${parentPath}.${nextSegment}`,
+        path: undefined,
         depth: (parent.depth ?? 0) + 1,
       };
 
-      addBall(newBall);
+      const parentPath = parent.type === 'article' ? undefined : parent.path;
+      const savedBall = await persistComment(newBall, parentPath, hitter.ball.userId);
+      addBall(savedBall);
       setNewBallIds((prev) => {
         const updated = new Set(prev);
-        updated.add(newBall.id);
+        updated.add(savedBall.id);
         return updated;
       });
     },
-    [addBall]
+    [addBall, persistComment]
   );
 
   // 물리 시뮬레이션 루프

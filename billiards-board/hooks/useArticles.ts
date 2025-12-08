@@ -11,15 +11,15 @@ export function useArticles() {
   const fetchArticles = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/article');
-      const data = await response.json();
+      const articleRes = await fetch('/api/article');
+      const articleData = await articleRes.json();
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch articles');
+      if (!articleData.success) {
+        throw new Error(articleData.error || 'Failed to fetch articles');
       }
 
       // Article을 Ball 타입으로 변환
-      const newBalls: Ball[] = data.data.articles.map((article: any) => ({
+      const articles: Ball[] = articleData.data.articles.map((article: any) => ({
         id: article.id,
         type: 'article' as const,
         content: article.content,
@@ -35,7 +35,32 @@ export function useArticles() {
         isDeleted: article.isDeleted,
       }));
 
-      setBalls(newBalls);
+      // 댓글 불러오기
+      const commentRes = await fetch('/api/comment');
+      const commentData = await commentRes.json();
+      if (!commentData.success) {
+        throw new Error(commentData.error || 'Failed to fetch comments');
+      }
+
+      const comments: Ball[] = commentData.data.comments.map((comment: any) => ({
+        id: comment.id,
+        type: 'comment' as const,
+        content: comment.content,
+        position: {
+          x: comment.positionX,
+          y: comment.positionY,
+          z: comment.positionZ,
+        },
+        radius: comment.radius,
+        userId: comment.userId,
+        createdAt: new Date(comment.createdAt),
+        isDeleted: comment.isDeleted,
+        articleId: comment.articleId,
+        path: comment.path,
+        depth: comment.depth,
+      }));
+
+      setBalls([...articles, ...comments]);
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch articles');

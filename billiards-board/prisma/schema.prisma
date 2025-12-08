@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 익명 사용자 (UUID 기반)
+model User {
+  id        String    @id @default(cuid())
+  uuid      String    @unique @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  articles  Article[]
+  comments  Comment[]
+
+  @@index([uuid])
+}
+
+// 글 (공)
+model Article {
+  id          String    @id @default(cuid())
+  content     String    @db.Text
+  userId      String
+
+  // Three.js 위치 정보
+  positionX   Float     @default(0)
+  positionY   Float     @default(0)
+  positionZ   Float     @default(0)
+
+  // 공의 반지름 (콘텐츠 길이나 댓글 수에 따라 결정 가능)
+  radius      Float     @default(1.0)
+
+  // Soft Delete
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+
+  @@index([userId])
+  @@index([isDeleted])
+  @@index([createdAt])
+}
+
+// 댓글 (충돌로 생성된 공)
+model Comment {
+  id          String    @id @default(cuid())
+  content     String    @db.Text
+  userId      String
+  articleId   String
+
+  // Path Model for tree structure
+  // 예: "001", "001.001", "001.002", "001.002.001"
+  path        String
+  depth       Int       @default(0)
+
+  // Three.js 위치 정보 (부모 공 주변에 배치)
+  positionX   Float     @default(0)
+  positionY   Float     @default(0)
+  positionZ   Float     @default(0)
+
+  // 공의 반지름
+  radius      Float     @default(0.5)
+
+  // Soft Delete
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article     Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([articleId])
+  @@index([path])
+  @@index([isDeleted])
+  @@index([createdAt])
+}
+
+// NextAuth.js 세션 관리 (선택적)
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  @@index([userId])
+}

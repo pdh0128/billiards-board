@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { content } = body;
+    const { content, startPosition } = body;
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       return NextResponse.json(
@@ -106,8 +106,45 @@ export async function POST(request: NextRequest) {
       radius: a.radius,
     }));
 
-    // 겹치지 않는 위치 생성
-    const position = generateNonCollidingPosition(existingPositions, 1.0, 10);
+    // 시작 위치 기반으로 공 생성
+    let position;
+    if (startPosition) {
+      // 시작 위치 주변에 랜덤하게 배치 (±2 범위)
+      const offsetX = (Math.random() - 0.5) * 4;
+      const offsetZ = (Math.random() - 0.5) * 4;
+      position = {
+        x: startPosition.x + offsetX,
+        y: startPosition.y,
+        z: startPosition.z + offsetZ,
+      };
+
+      // 다른 공과 겹치지 않도록 조정
+      let attempts = 0;
+      while (attempts < 10) {
+        const collision = existingPositions.some(({ position: pos, radius }) => {
+          const distance = Math.sqrt(
+            Math.pow(position.x - pos.x, 2) +
+            Math.pow(position.y - pos.y, 2) +
+            Math.pow(position.z - pos.z, 2)
+          );
+          return distance < (1.0 + radius);
+        });
+
+        if (!collision) break;
+
+        const newOffsetX = (Math.random() - 0.5) * 4;
+        const newOffsetZ = (Math.random() - 0.5) * 4;
+        position = {
+          x: startPosition.x + newOffsetX,
+          y: startPosition.y,
+          z: startPosition.z + newOffsetZ,
+        };
+        attempts++;
+      }
+    } else {
+      // 시작 위치가 없으면 기존 로직 사용
+      position = generateNonCollidingPosition(existingPositions, 1.0, 10);
+    }
 
     // DB에 저장
     const article = await prisma.article.create({

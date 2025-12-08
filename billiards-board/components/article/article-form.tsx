@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
+import { useGame } from '@/contexts/game-context';
 
 interface ArticleFormProps {
   onSuccess?: () => void;
 }
 
 export function ArticleForm({ onSuccess }: ArticleFormProps) {
+  const { currentPlayer } = useGame();
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +39,10 @@ export function ArticleForm({ onSuccess }: ArticleFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: content.trim() }),
+        body: JSON.stringify({
+          content: content.trim(),
+          startPosition: currentPlayer?.startPosition,
+        }),
       });
 
       const data = await response.json();

@@ -170,10 +170,13 @@ export function CueStick({ onBallHit }: CueStickProps) {
     <>
       {/* 큐대 */}
       {selectedBall && (
-        <mesh ref={cueRef}>
-          <cylinderGeometry args={[0.1, 0.15, 5, 8]} />
-          <meshStandardMaterial color="#8B4513" roughness={0.6} />
-        </mesh>
+        <group ref={cueRef}>
+          {/* Rotate cylinder so its axis lies horizontally (along Z) */}
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.1, 0.15, 5, 8]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.6} />
+          </mesh>
+        </group>
       )}
 
     </>

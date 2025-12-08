@@ -30,9 +30,9 @@ const COLORS = [
   '#ec4899', // pink
 ];
 
-// 당구대 크기
-const TABLE_WIDTH = 20;
-const TABLE_DEPTH = 12;
+// 당구대 크기 (4배 확대)
+const TABLE_WIDTH = 80;
+const TABLE_DEPTH = 48;
 
 // 플레이어 수에 따른 시작 위치 계산
 function calculateStartPosition(playerIndex: number, totalPlayers: number): { x: number; y: number; z: number } {

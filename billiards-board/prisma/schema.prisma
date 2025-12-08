@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 // 익명 사용자 (UUID 기반)
@@ -26,7 +26,7 @@ model User {
 // 글 (공)
 model Article {
   id          String    @id @default(cuid())
-  content     String    @db.Text
+  content     String
   userId      String
 
   // Three.js 위치 정보
@@ -55,7 +55,7 @@ model Article {
 // 댓글 (충돌로 생성된 공)
 model Comment {
   id          String    @id @default(cuid())
-  content     String    @db.Text
+  content     String
   userId      String
   articleId   String
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Mesh, Vector3 } from 'three';
 import { useFrame } from '@react-three/fiber';
 import { animate } from 'animejs';
@@ -9,8 +9,17 @@ import { Ball as BallType } from '@/types';
 interface BallProps {
   ball: BallType;
   isNew?: boolean;
-  table: { width: number; depth: number; height: number };
-  registerController: (id: string, applyImpulse: (force: Vector3) => void) => () => void;
+  registerController: (
+    id: string,
+    body: {
+      applyImpulse: (force: Vector3) => void;
+      position: Vector3;
+      velocity: Vector3;
+      radius: number;
+      meshRef: React.RefObject<Mesh>;
+      ball: BallType;
+    }
+  ) => () => void;
   toolMode: 'cue' | 'hand';
   onReadBall: (ball: BallType) => void;
 }
@@ -18,7 +27,6 @@ interface BallProps {
 export function Ball({
   ball,
   isNew = false,
-  table,
   registerController,
   toolMode,
   onReadBall,
@@ -40,15 +48,6 @@ export function Ball({
       meshRef.current.userData.ballId = ball.id;
     }
   }, [ball.id, ball.position.x, ball.position.y, ball.position.z]);
-
-  const bounds = useMemo(
-    () => ({
-      x: table.width / 2 - ball.radius,
-      z: table.depth / 2 - ball.radius,
-      y: ball.position.y,
-    }),
-    [table.width, table.depth, ball.radius, ball.position.y]
-  );
 
   // 공 색상 (depth에 따라 변경)
   const getColor = () => {
@@ -83,38 +82,8 @@ export function Ball({
     }
   }, [isNew]);
 
-  useFrame((_, delta) => {
+  useFrame(() => {
     if (!meshRef.current) return;
-
-    // 물리 업데이트: 단순 감쇠 + 벽 충돌
-    positionRef.current.addScaledVector(velocityRef.current, delta);
-    velocityRef.current.multiplyScalar(0.985);
-
-    const clampAndBounce = (
-      coord: 'x' | 'z',
-      limit: number
-    ) => {
-      if (positionRef.current[coord] > limit) {
-        positionRef.current[coord] = limit;
-        velocityRef.current[coord] *= -0.7;
-      } else if (positionRef.current[coord] < -limit) {
-        positionRef.current[coord] = -limit;
-        velocityRef.current[coord] *= -0.7;
-      }
-    };
-
-    clampAndBounce('x', bounds.x);
-    clampAndBounce('z', bounds.z);
-
-    // 테이블 표면에 고정 (Y 관통 방지)
-    positionRef.current.y = bounds.y;
-    velocityRef.current.y = 0;
-
-    if (velocityRef.current.length() < 0.05) {
-      velocityRef.current.set(0, 0, 0);
-    }
-
-    meshRef.current.position.copy(positionRef.current);
 
     // 호버 효과
     if (!isNew) {
@@ -131,9 +100,16 @@ export function Ball({
       velocityRef.current.add(force.clone());
     };
 
-    const unregister = registerController(ball.id, applyImpulse);
+    const unregister = registerController(ball.id, {
+      applyImpulse,
+      position: positionRef.current,
+      velocity: velocityRef.current,
+      radius: ball.radius,
+      meshRef,
+      ball,
+    });
     return () => unregister();
-  }, [ball.id, registerController]);
+  }, [ball, registerController]);
 
   return (
     <mesh

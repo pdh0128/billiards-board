@@ -86,7 +86,7 @@ export function Scene() {
         </mesh>
 
         {/* 공 관리자 */}
-        <BallManager />
+        <BallManager table={{ width: TABLE_WIDTH, depth: TABLE_DEPTH, height: TABLE_HEIGHT }} />
       </Canvas>
     </div>
   );

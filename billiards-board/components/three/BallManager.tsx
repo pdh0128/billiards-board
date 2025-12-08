@@ -1,16 +1,25 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { Vector3 } from 'three';
 import { Ball as BallComponent } from './Ball';
+import { CueStick } from './CueStick';
 import { useArticles } from '@/hooks/useArticles';
 import { useSocket } from '@/hooks/useSocket';
 import { Ball } from '@/types';
 
-export function BallManager() {
+interface TableSize {
+  width: number;
+  depth: number;
+  height: number;
+}
+
+export function BallManager({ table }: { table: TableSize }) {
   const { balls, addBall, removeBall } = useArticles();
   const socket = useSocket();
   const [newBallIds, setNewBallIds] = useState<Set<string>>(new Set());
   const initialLoadRef = useRef(true);
+  const controllersRef = useRef<Map<string, (force: Vector3) => void>>(new Map());
 
   useEffect(() => {
     if (!socket) return;
@@ -105,6 +114,18 @@ export function BallManager() {
     }
   }, [balls]);
 
+  const registerController = useCallback((id: string, applyImpulse: (force: Vector3) => void) => {
+    controllersRef.current.set(id, applyImpulse);
+    return () => controllersRef.current.delete(id);
+  }, []);
+
+  const handleBallHit = useCallback((ballId: string, force: Vector3) => {
+    const applyImpulse = controllersRef.current.get(ballId);
+    if (applyImpulse) {
+      applyImpulse(force);
+    }
+  }, []);
+
   return (
     <>
       {balls.map((ball) => (
@@ -112,8 +133,11 @@ export function BallManager() {
           key={ball.id}
           ball={ball}
           isNew={newBallIds.has(ball.id)}
+          table={table}
+          registerController={registerController}
         />
       ))}
+      <CueStick onBallHit={handleBallHit} />
     </>
   );
 }

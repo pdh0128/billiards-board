@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Vector3, Raycaster, Mesh } from 'three';
+import { Vector2, Vector3, Raycaster, Mesh } from 'three';
 import * as THREE from 'three';
 
 interface CueStickProps {
@@ -10,13 +10,13 @@ interface CueStickProps {
 }
 
 export function CueStick({ onBallHit }: CueStickProps) {
-  const { camera, scene } = useThree();
+  const { camera, scene, gl } = useThree();
   const raycaster = useRef(new Raycaster());
+  const cueDirectionRef = useRef(new Vector3());
+  const pointer = useRef(new Vector2());
   const [selectedBall, setSelectedBall] = useState<Mesh | null>(null);
   const [isCharging, setIsCharging] = useState(false);
-  const [chargeStart, setChargeStart] = useState(0);
-  const [cuePosition, setCuePosition] = useState(new Vector3());
-  const [cueDirection, setCueDirection] = useState(new Vector3());
+  const chargeStartRef = useRef(0);
 
   const cueRef = useRef<Mesh>(null);
   const maxCharge = 2000; // 최대 차징 시간 (ms)
@@ -33,7 +33,7 @@ export function CueStick({ onBallHit }: CueStickProps) {
 
     // 큐대 위치 (공 뒤쪽)
     const distance = isCharging
-      ? 3 + Math.min((Date.now() - chargeStart) / maxCharge, 1) * 2
+      ? 3 + Math.min((Date.now() - chargeStartRef.current) / maxCharge, 1) * 2
       : 3;
 
     const cuePos = new Vector3()
@@ -45,49 +45,56 @@ export function CueStick({ onBallHit }: CueStickProps) {
     // 큐대를 공을 향하도록 회전
     cueRef.current.lookAt(ballPos);
 
-    setCueDirection(direction);
+    cueDirectionRef.current.copy(direction);
   });
 
-  const handlePointerDown = (event: any) => {
-    event.stopPropagation();
-
-    // Raycaster로 클릭한 공 찾기
-    const mouse = new THREE.Vector2(
-      (event.clientX / window.innerWidth) * 2 - 1,
-      -(event.clientY / window.innerHeight) * 2 + 1
+  const pickBall = (clientX: number, clientY: number) => {
+    const { width, height, left, top } = gl.domElement.getBoundingClientRect();
+    pointer.current.set(
+      ((clientX - left) / width) * 2 - 1,
+      -((clientY - top) / height) * 2 + 1
     );
 
-    raycaster.current.setFromCamera(mouse, camera);
-
-    // 'ball'이라는 name을 가진 mesh만 검사
+    raycaster.current.setFromCamera(pointer.current, camera);
     const balls = scene.children.filter((obj) => obj.name === 'ball');
-    const intersects = raycaster.current.intersectObjects(balls);
+    const intersects = raycaster.current.intersectObjects(balls, true);
+    return intersects[0]?.object as Mesh | undefined;
+  };
 
-    if (intersects.length > 0) {
-      const ball = intersects[0].object as Mesh;
-      setSelectedBall(ball);
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const hit = pickBall(event.clientX, event.clientY);
+      if (!hit) return;
+      setSelectedBall(hit);
       setIsCharging(true);
-      setChargeStart(Date.now());
-    }
-  };
+      chargeStartRef.current = Date.now();
+    };
 
-  const handlePointerUp = () => {
-    if (!isCharging || !selectedBall) return;
+    const handlePointerUp = () => {
+      if (!isCharging || !selectedBall) return;
 
-    const chargeTime = Math.min(Date.now() - chargeStart, maxCharge);
-    const forceMagnitude = (chargeTime / maxCharge) * 20; // 최대 힘 20
+      const chargeTime = Math.min(Date.now() - chargeStartRef.current, maxCharge);
+      const forceMagnitude = (chargeTime / maxCharge) * 20; // 최대 힘 20
+      const force = cueDirectionRef.current.clone().multiplyScalar(forceMagnitude);
+      const ballId = (selectedBall.userData as any).ballId;
 
-    // 공에게 힘 적용 (실제로는 공의 userData에 ballId가 있어야 함)
-    const force = cueDirection.clone().multiplyScalar(forceMagnitude);
-    const ballId = (selectedBall.userData as any).ballId;
+      if (ballId) {
+        onBallHit(ballId, force);
+      }
 
-    if (ballId) {
-      onBallHit(ballId, force);
-    }
+      setIsCharging(false);
+      setSelectedBall(null);
+    };
 
-    setIsCharging(false);
-    setSelectedBall(null);
-  };
+    const canvas = gl.domElement;
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [camera, gl.domElement, scene, isCharging, selectedBall, onBallHit]);
 
   return (
     <>
@@ -99,16 +106,6 @@ export function CueStick({ onBallHit }: CueStickProps) {
         </mesh>
       )}
 
-      {/* 마우스 이벤트 캡처용 투명 평면 */}
-      <mesh
-        position={[0, 0, 0]}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        visible={false}
-      >
-        <planeGeometry args={[1000, 1000]} />
-        <meshBasicMaterial transparent opacity={0} />
-      </mesh>
     </>
   );
 }

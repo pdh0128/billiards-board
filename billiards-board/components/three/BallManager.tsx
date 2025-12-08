@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import type { RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Mesh, Vector3 } from 'three';
 import { Ball as BallComponent } from './Ball';
@@ -20,7 +21,7 @@ type ToolMode = 'cue' | 'hand';
 interface Props {
   table: TableSize;
   toolMode: ToolMode;
-  onReadBall: (ball: Ball) => void;
+  onReadThread: (data: { article: Ball; comments: Ball[]; focusId: string }) => void;
 }
 
 interface PhysicsBody {
@@ -28,17 +29,31 @@ interface PhysicsBody {
   position: Vector3;
   velocity: Vector3;
   radius: number;
-  meshRef: React.RefObject<Mesh>;
+  meshRef: RefObject<Mesh>;
   ball: Ball;
   lastHitBy?: string;
 }
 
-export function BallManager({ table, toolMode, onReadBall }: Props) {
+export function BallManager({ table, toolMode, onReadThread }: Props) {
   const { balls, addBall, removeBall } = useArticles();
   const socket = useSocket();
   const [newBallIds, setNewBallIds] = useState<Set<string>>(new Set());
   const initialLoadRef = useRef(true);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
+  const ballsRef = useRef<Ball[]>([]);
+
+  useEffect(() => {
+    ballsRef.current = balls;
+  }, [balls]);
+
+  useEffect(() => {
+    balls.forEach((b) => {
+      const body = bodiesRef.current.get(b.id);
+      if (body) {
+        body.ball = b;
+      }
+    });
+  }, [balls]);
 
   useEffect(() => {
     if (!socket) return;
@@ -55,6 +70,7 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
           z: article.positionZ,
         },
         radius: article.radius,
+        commentsCount: 0,
         userId: article.userId,
         createdAt: new Date(article.createdAt),
         isDeleted: false,
@@ -87,6 +103,7 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
           z: comment.positionZ,
         },
         radius: comment.radius,
+        commentsCount: 0,
         userId: comment.userId,
         createdAt: new Date(comment.createdAt),
         isDeleted: false,
@@ -133,6 +150,27 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
     }
   }, [balls]);
 
+  const commentCountByArticle = useMemo(() => {
+    const map = new Map<string, number>();
+    balls.forEach((b) => {
+      if (b.type === 'comment' && b.articleId) {
+        map.set(b.articleId, (map.get(b.articleId) ?? 0) + 1);
+      }
+    });
+    return map;
+  }, [balls]);
+
+  const computeRadius = useCallback(
+    (ball: Ball) => {
+      if (ball.type === 'article') {
+        const count = commentCountByArticle.get(ball.id) ?? 0;
+        return ball.radius + count * 0.2;
+      }
+      return ball.radius;
+    },
+    [commentCountByArticle]
+  );
+
   const registerController = useCallback(
     (id: string, body: PhysicsBody) => {
       bodiesRef.current.set(id, body);
@@ -148,6 +186,21 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
     }
   }, []);
 
+  const handleReadBall = useCallback(
+    (ball: Ball) => {
+      const articleId = ball.type === 'article' ? ball.id : ball.articleId ?? ball.id;
+      const article = ballsRef.current.find((b) => b.type === 'article' && b.id === articleId);
+      if (!article) return;
+
+      const comments = ballsRef.current
+        .filter((b) => b.type === 'comment' && b.articleId === articleId)
+        .sort((a, b) => (a.path ?? '').localeCompare(b.path ?? ''));
+
+      onReadThread({ article, comments, focusId: ball.id });
+    },
+    [onReadThread]
+  );
+
   // 포켓 좌표 (Scene의 포켓과 동일)
   const pockets = [
     new Vector3(-table.width / 2 + 2, 0, -table.depth / 2 + 2),
@@ -159,7 +212,6 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
   ];
 
   const pocketRadius = 1.8;
-
   const spawnCommentFromPocket = useCallback(
     (pocketed: PhysicsBody) => {
       const hitterId = pocketed.lastHitBy;
@@ -183,6 +235,7 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
           z: hitter.position.z + (Math.random() - 0.5) * 4,
         },
         radius: Math.max(pocketed.radius * 0.8, 0.5),
+        commentsCount: 0,
         userId: parent.userId,
         createdAt: new Date(),
         isDeleted: false,
@@ -274,6 +327,10 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
 
       if (body.meshRef.current) {
         body.meshRef.current.position.copy(body.position);
+        // radius를 댓글 수에 따라 조정
+        const r = computeRadius(body.ball);
+        body.radius = r;
+        body.meshRef.current.scale.setScalar(r / body.ball.radius);
       }
 
       // ball 데이터의 위치도 갱신 (댓글 생성 시 활용)
@@ -287,16 +344,20 @@ export function BallManager({ table, toolMode, onReadBall }: Props) {
 
   return (
     <>
-      {balls.map((ball) => (
-        <BallComponent
-      key={ball.id}
-      ball={ball}
-      isNew={newBallIds.has(ball.id)}
-      registerController={registerController}
-      toolMode={toolMode}
-      onReadBall={onReadBall}
-    />
-  ))}
+      {balls.map((ball) => {
+        const radius = computeRadius(ball);
+        return (
+          <BallComponent
+            key={ball.id}
+            ball={ball}
+            radius={radius}
+            isNew={newBallIds.has(ball.id)}
+            registerController={registerController}
+            toolMode={toolMode}
+            onReadBall={handleReadBall}
+          />
+        );
+      })}
       {toolMode === 'cue' && <CueStick onBallHit={handleBallHit} />}
     </>
   );

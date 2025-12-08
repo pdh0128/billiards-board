@@ -13,11 +13,15 @@ export function Scene() {
   const TABLE_DEPTH = 48;
   const TABLE_HEIGHT = 1;
   const [toolMode, setToolMode] = useState<'cue' | 'hand'>('cue');
-  const [selectedContent, setSelectedContent] = useState<Ball | null>(null);
+  const [selectedThread, setSelectedThread] = useState<{
+    article: Ball;
+    comments: Ball[];
+    focusId: string;
+  } | null>(null);
 
   useEffect(() => {
     if (toolMode !== 'hand') {
-      setSelectedContent(null);
+      setSelectedThread(null);
     }
   }, [toolMode]);
 
@@ -25,21 +29,50 @@ export function Scene() {
     <div className="w-full h-screen absolute inset-0">
       <ToolSelector mode={toolMode} onChange={setToolMode} />
 
-      {selectedContent && toolMode === 'hand' && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black/80 text-white border border-white/10 rounded-xl shadow-2xl max-w-xl w-[90%] p-4">
-          <div className="flex justify-between items-center mb-2">
-            <div className="text-sm text-gray-300">
-              {selectedContent.type === 'article' ? '글' : '댓글'}
+      {selectedThread && toolMode === 'hand' && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-2xl w-[92%]">
+          <div className="bg-gray-950/90 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-md p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs uppercase tracking-wider text-gray-400">
+                글 + 댓글 미리보기
+              </div>
+              <button
+                className="text-gray-400 hover:text-white text-sm"
+                onClick={() => setSelectedThread(null)}
+              >
+                닫기
+              </button>
             </div>
-            <button
-              className="text-gray-400 hover:text-white text-sm"
-              onClick={() => setSelectedContent(null)}
-            >
-              닫기
-            </button>
-          </div>
-          <div className="text-lg leading-relaxed break-words whitespace-pre-wrap">
-            {selectedContent.content}
+            <div className="space-y-3">
+              <div className="rounded-xl bg-gray-900/90 border border-gray-800 px-4 py-3 text-white shadow-inner">
+                <div className="text-[11px] text-gray-400 mb-1">최상위 글</div>
+                <div className="leading-relaxed whitespace-pre-wrap break-words text-sm">
+                  {selectedThread.article.content}
+                </div>
+              </div>
+              {selectedThread.comments.length > 0 ? (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {selectedThread.comments.map((c) => (
+                    <div
+                      key={c.id}
+                      className={`rounded-lg px-4 py-3 border text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                        c.id === selectedThread.focusId
+                          ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-50'
+                          : 'bg-gray-900/70 border-gray-800 text-gray-100'
+                      }`}
+                      style={{ marginLeft: Math.min((c.depth ?? 0) * 14, 80) }}
+                    >
+                      <div className="text-[11px] text-gray-400 mb-1">
+                        댓글 depth {c.depth ?? 1}
+                      </div>
+                      {c.content}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400">댓글이 없습니다.</div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -121,7 +154,7 @@ export function Scene() {
         <BallManager
           table={{ width: TABLE_WIDTH, depth: TABLE_DEPTH, height: TABLE_HEIGHT }}
           toolMode={toolMode}
-          onReadBall={(ball) => setSelectedContent(ball)}
+          onReadThread={(data) => setSelectedThread(data)}
         />
       </Canvas>
     </div>

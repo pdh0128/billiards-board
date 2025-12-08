@@ -29,6 +29,7 @@ export function useArticles() {
           z: article.positionZ,
         },
         radius: article.radius,
+        commentsCount: article._count?.comments ?? 0,
         userId: article.userId,
         createdAt: new Date(article.createdAt),
         isDeleted: article.isDeleted,
@@ -51,7 +52,7 @@ export function useArticles() {
 
   // 새 공 추가 (WebSocket이나 폼 제출 후)
   const addBall = useCallback((ball: Ball) => {
-    setBalls((prev) => [...prev, ball]);
+    setBalls((prev) => [...prev, { commentsCount: 0, ...ball }]);
   }, []);
 
   // 공 제거
@@ -64,6 +65,10 @@ export function useArticles() {
     fetchArticles();
   }, [fetchArticles]);
 
+  const updateBall = useCallback((id: string, updater: (ball: Ball) => Ball) => {
+    setBalls((prev) => prev.map((b) => (b.id === id ? updater(b) : b)));
+  }, []);
+
   return {
     balls,
     isLoading,
@@ -71,5 +76,6 @@ export function useArticles() {
     addBall,
     removeBall,
     refresh,
+    updateBall,
   };
 }

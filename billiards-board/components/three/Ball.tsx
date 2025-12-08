@@ -8,6 +8,7 @@ import { Ball as BallType } from '@/types';
 
 interface BallProps {
   ball: BallType;
+  radius: number;
   isNew?: boolean;
   registerController: (
     id: string,
@@ -26,6 +27,7 @@ interface BallProps {
 
 export function Ball({
   ball,
+  radius,
   isNew = false,
   registerController,
   toolMode,
@@ -46,8 +48,9 @@ export function Ball({
       meshRef.current.position.copy(positionRef.current);
       meshRef.current.name = 'ball';
       meshRef.current.userData.ballId = ball.id;
+      meshRef.current.scale.setScalar(radius / ball.radius);
     }
-  }, [ball.id, ball.position.x, ball.position.y, ball.position.z]);
+  }, [ball.id, ball.position.x, ball.position.y, ball.position.z, radius, ball.radius]);
 
   // 공 색상 (depth에 따라 변경)
   const getColor = () => {
@@ -104,12 +107,12 @@ export function Ball({
       applyImpulse,
       position: positionRef.current,
       velocity: velocityRef.current,
-      radius: ball.radius,
+      radius,
       meshRef,
       ball,
     });
     return () => unregister();
-  }, [ball, registerController]);
+  }, [ball, registerController, radius]);
 
   return (
     <mesh

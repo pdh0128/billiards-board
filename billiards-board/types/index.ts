@@ -17,6 +17,7 @@ export interface Ball {
   userId: string;
   createdAt: Date;
   isDeleted: boolean;
+  commentsCount?: number;
 
   // 댓글인 경우
   articleId?: string;

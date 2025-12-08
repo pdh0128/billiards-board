@@ -41,6 +41,10 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   const initialLoadRef = useRef(true);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
   const ballsRef = useRef<Ball[]>([]);
+  const pendingSavesRef = useRef<
+    Map<string, { id: string; type: 'article' | 'comment'; position: Vector3 }>
+  >(new Map());
+  const lastPersistedRef = useRef<Map<string, Vector3>>(new Map());
 
   useEffect(() => {
     ballsRef.current = balls;
@@ -186,6 +190,52 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     }
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (pendingSavesRef.current.size === 0) return;
+      const updates = Array.from(pendingSavesRef.current.values()).map((u) => ({
+        id: u.id,
+        type: u.type,
+        position: { x: u.position.x, y: u.position.y, z: u.position.z },
+      }));
+      pendingSavesRef.current.clear();
+
+      try {
+        await fetch('/api/ball/position', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates }),
+        });
+      } catch (error) {
+        console.error('Failed to persist ball positions', error);
+      }
+    }, 1200);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const getSubtreeComments = useCallback(
+    (root: Ball) => {
+      if (root.type === 'article') {
+        return ballsRef.current
+          .filter((b) => b.type === 'comment' && b.articleId === root.id)
+          .sort((a, b) => (a.path ?? '').localeCompare(b.path ?? ''));
+      }
+      if (!root.path) return [];
+      return ballsRef.current
+        .filter(
+          (b) =>
+            b.type === 'comment' &&
+            b.articleId === root.articleId &&
+            b.path &&
+            root.path &&
+            b.path.startsWith(root.path)
+        )
+        .sort((a, b) => (a.path ?? '').localeCompare(b.path ?? ''));
+    },
+    []
+  );
+
   const persistComment = useCallback(async (comment: Ball, parentPath?: string, hitterUserId?: string) => {
     try {
       const response = await fetch('/api/comment', {
@@ -252,7 +302,10 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       if (!hitter) return;
 
       const parent = hitter.ball;
-      const newBall: Ball = {
+      const targetArticleId = parent.type === 'article' ? parent.id : parent.articleId ?? parent.id;
+      const parentPathForRoot = parent.type === 'article' ? undefined : parent.path;
+
+      const baseComment: Ball = {
         id: `${pocketed.ball.id}-comment-${Date.now()}`,
         type: 'comment',
         content: pocketed.ball.content,
@@ -266,21 +319,68 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
         userId: parent.userId,
         createdAt: new Date(),
         isDeleted: false,
-        articleId: parent.type === 'article' ? parent.id : parent.articleId ?? parent.id,
+        articleId: targetArticleId,
         path: undefined,
         depth: (parent.depth ?? 0) + 1,
       };
 
-      const parentPath = parent.type === 'article' ? undefined : parent.path;
-      const savedBall = await persistComment(newBall, parentPath, hitter.ball.userId);
-      addBall(savedBall);
+      const savedRoot = await persistComment(baseComment, parentPathForRoot, hitter.ball.userId);
+      addBall(savedRoot);
       setNewBallIds((prev) => {
         const updated = new Set(prev);
-        updated.add(savedBall.id);
+        updated.add(savedRoot.id);
         return updated;
       });
+
+      const pathMap = new Map<string, string>();
+      if (pocketed.ball.type === 'comment' && pocketed.ball.path) {
+        pathMap.set(pocketed.ball.path, savedRoot.path ?? '');
+      } else {
+        pathMap.set('ROOT', savedRoot.path ?? '');
+      }
+
+      const subtree = getSubtreeComments(pocketed.ball);
+      for (const comment of subtree) {
+        if (pocketed.ball.type === 'comment' && comment.id === pocketed.ball.id) {
+          continue; // root already handled
+        }
+        if (pocketed.ball.type === 'article' && !comment.path) continue;
+
+        const oldParentPath = comment.path
+          ? comment.path.split('.').slice(0, -1).join('.')
+          : 'ROOT';
+        const parentPath = pathMap.get(oldParentPath) ?? savedRoot.path;
+
+        const clone: Ball = {
+          ...comment,
+          id: `${comment.id}-moved-${Date.now()}`,
+          articleId: targetArticleId,
+          path: undefined,
+          createdAt: new Date(),
+        };
+
+        const saved = await persistComment(clone, parentPath, hitter.ball.userId);
+        pathMap.set(comment.path ?? comment.id, saved.path ?? '');
+        addBall(saved);
+        setNewBallIds((prev) => {
+          const updated = new Set(prev);
+          updated.add(saved.id);
+          return updated;
+        });
+      }
+
+      // 원본 댓글 서브트리 제거
+      const removeIds =
+        pocketed.ball.type === 'article'
+          ? subtree.map((c) => c.id)
+          : subtree.map((c) => c.id).concat(pocketed.ball.id);
+
+      removeIds.forEach((id) => {
+        bodiesRef.current.delete(id);
+        removeBall(id);
+      });
     },
-    [addBall, persistComment]
+    [addBall, getSubtreeComments, persistComment, removeBall]
   );
 
   // 물리 시뮬레이션 루프
@@ -360,6 +460,20 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
         const r = computeRadius(body.ball);
         body.radius = r;
         body.meshRef.current.scale.setScalar(r / body.ball.radius);
+      }
+
+      // 위치 저장 스케줄링 (정지 상태에 가까운 경우만)
+      const speedSq = body.velocity.lengthSq();
+      const last = lastPersistedRef.current.get(body.ball.id);
+      if (speedSq < 0.0025) {
+        if (!last || last.distanceTo(body.position) > 0.05) {
+          pendingSavesRef.current.set(body.ball.id, {
+            id: body.ball.id,
+            type: body.ball.type,
+            position: body.position.clone(),
+          });
+          lastPersistedRef.current.set(body.ball.id, body.position.clone());
+        }
       }
 
       // ball 데이터의 위치도 갱신 (댓글 생성 시 활용)

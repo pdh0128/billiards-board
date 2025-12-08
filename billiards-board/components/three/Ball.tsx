@@ -46,11 +46,12 @@ export function Ball({
 
     if (meshRef.current) {
       meshRef.current.position.copy(positionRef.current);
-      meshRef.current.name = 'ball';
+      meshRef.current.name = ball.type === 'article' ? 'ball' : '';
       meshRef.current.userData.ballId = ball.id;
       meshRef.current.scale.setScalar(radius / ball.radius);
+      meshRef.current.visible = ball.type === 'article';
     }
-  }, [ball.id, ball.position.x, ball.position.y, ball.position.z, radius, ball.radius]);
+  }, [ball.id, ball.position.x, ball.position.y, ball.position.z, radius, ball.radius, ball.type]);
 
   // 공 색상 (depth에 따라 변경)
   const getColor = () => {
@@ -118,10 +119,10 @@ export function Ball({
     <mesh
       ref={meshRef}
       position={[ball.position.x, ball.position.y, ball.position.z]}
-      onPointerOver={() => setHovered(true)}
+      onPointerOver={() => ball.type === 'article' && setHovered(true)}
       onPointerOut={() => setHovered(false)}
       onClick={() => {
-        if (toolMode === 'hand') {
+        if (toolMode === 'hand' && ball.type === 'article') {
           onReadBall(ball);
         }
       }}

@@ -11,7 +11,7 @@ interface ArticleFormProps {
 }
 
 export function ArticleForm({ onSuccess }: ArticleFormProps) {
-  const { currentPlayer } = useGame();
+  const { myPlayer, isMyTurn, nextTurn, getPlayerStartPosition } = useGame();
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,9 +31,16 @@ export function ArticleForm({ onSuccess }: ArticleFormProps) {
       return;
     }
 
+    if (!isMyTurn) {
+      setError('내 차례가 아닙니다');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
+      const startPosition = myPlayer ? getPlayerStartPosition(myPlayer.id) : null;
+
       const response = await fetch('/api/article', {
         method: 'POST',
         headers: {
@@ -41,7 +48,7 @@ export function ArticleForm({ onSuccess }: ArticleFormProps) {
         },
         body: JSON.stringify({
           content: content.trim(),
-          startPosition: currentPlayer?.startPosition,
+          startPosition,
         }),
       });
 
@@ -51,9 +58,10 @@ export function ArticleForm({ onSuccess }: ArticleFormProps) {
         throw new Error(data.error || 'Failed to create article');
       }
 
-      // 성공
+      // 성공 - 다음 턴으로 넘기기
       setContent('');
       setOpen(false);
+      nextTurn();
       onSuccess?.();
     } catch (err: any) {
       setError(err.message || 'Failed to create article');
@@ -66,8 +74,13 @@ export function ArticleForm({ onSuccess }: ArticleFormProps) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          className="fixed bottom-8 right-8 h-16 w-16 rounded-full shadow-lg z-50 bg-blue-500 hover:bg-blue-600"
+          className={`fixed bottom-8 right-8 h-16 w-16 rounded-full shadow-lg z-50 ${
+            isMyTurn
+              ? 'bg-blue-500 hover:bg-blue-600 animate-pulse'
+              : 'bg-gray-500 cursor-not-allowed'
+          }`}
           size="icon"
+          disabled={!isMyTurn}
         >
           <Plus className="h-8 w-8 text-white" />
         </Button>

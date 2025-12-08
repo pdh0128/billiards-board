@@ -28,8 +28,14 @@ export function CueStick({ onBallHit }: CueStickProps) {
     const ballPos = selectedBall.position.clone();
     const cameraPos = camera.position.clone();
 
-    // 카메라에서 공으로의 방향
-    const direction = new Vector3().subVectors(ballPos, cameraPos).normalize();
+    // 카메라에서 공으로의 방향 (XZ 평면에 투영)
+    const direction = new Vector3().subVectors(ballPos, cameraPos);
+    direction.y = 0;
+    if (direction.lengthSq() === 0) {
+      direction.set(0, 0, 1);
+    } else {
+      direction.normalize();
+    }
 
     // 큐대 위치 (공 뒤쪽)
     const distance = isCharging

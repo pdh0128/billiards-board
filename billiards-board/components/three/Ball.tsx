@@ -102,6 +102,10 @@ export function Ball({
     clampAndBounce('x', bounds.x);
     clampAndBounce('z', bounds.z);
 
+    // 테이블 표면에 고정 (Y 관통 방지)
+    positionRef.current.y = bounds.y;
+    velocityRef.current.y = 0;
+
     if (velocityRef.current.length() < 0.05) {
       velocityRef.current.set(0, 0, 0);
     }

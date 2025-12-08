@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Vector2, Vector3, Raycaster, Mesh } from 'three';
+import { Vector2, Vector3, Raycaster, Mesh, Plane } from 'three';
 import * as THREE from 'three';
 
 interface CueStickProps {
   onBallHit: (ballId: string, force: Vector3) => void;
 }
+
+type CuePhase = 'idle' | 'position' | 'aim' | 'power';
 
 export function CueStick({ onBallHit }: CueStickProps) {
   const { camera, scene, gl } = useThree();
@@ -15,8 +17,11 @@ export function CueStick({ onBallHit }: CueStickProps) {
   const cueDirectionRef = useRef(new Vector3());
   const pointer = useRef(new Vector2());
   const [selectedBall, setSelectedBall] = useState<Mesh | null>(null);
+  const [phase, setPhase] = useState<CuePhase>('idle');
   const [isCharging, setIsCharging] = useState(false);
   const chargeStartRef = useRef(0);
+  const cueDistanceRef = useRef(4);
+  const hitPlane = useRef(new Plane(new Vector3(0, 1, 0), 0));
 
   const cueRef = useRef<Mesh>(null);
   const maxCharge = 2000; // 최대 차징 시간 (ms)
@@ -29,18 +34,13 @@ export function CueStick({ onBallHit }: CueStickProps) {
     const cameraPos = camera.position.clone();
 
     // 카메라에서 공으로의 방향 (XZ 평면에 투영)
-    const direction = new Vector3().subVectors(ballPos, cameraPos);
-    direction.y = 0;
-    if (direction.lengthSq() === 0) {
-      direction.set(0, 0, 1);
-    } else {
-      direction.normalize();
-    }
+    const direction =
+      cueDirectionRef.current.lengthSq() > 0
+        ? cueDirectionRef.current.clone()
+        : new Vector3().subVectors(ballPos, cameraPos).setY(0).normalize();
 
     // 큐대 위치 (공 뒤쪽)
-    const distance = isCharging
-      ? 3 + Math.min((Date.now() - chargeStartRef.current) / maxCharge, 1) * 2
-      : 3;
+    const distance = cueDistanceRef.current + (isCharging ? 0.5 : 0);
 
     const cuePos = new Vector3()
       .copy(ballPos)
@@ -67,40 +67,104 @@ export function CueStick({ onBallHit }: CueStickProps) {
     return intersects[0]?.object as Mesh | undefined;
   };
 
+  const pickOnTable = (clientX: number, clientY: number, y: number) => {
+    const { width, height, left, top } = gl.domElement.getBoundingClientRect();
+    pointer.current.set(
+      ((clientX - left) / width) * 2 - 1,
+      -((clientY - top) / height) * 2 + 1
+    );
+
+    raycaster.current.setFromCamera(pointer.current, camera);
+    hitPlane.current.constant = -y;
+    const target = new Vector3();
+    if (raycaster.current.ray.intersectPlane(hitPlane.current, target)) {
+      return target;
+    }
+    return null;
+  };
+
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
       const hit = pickBall(event.clientX, event.clientY);
       if (!hit) return;
       setSelectedBall(hit);
-      setIsCharging(true);
-      chargeStartRef.current = Date.now();
+      setPhase('position');
+      cueDirectionRef.current.set(0, 0, 0);
+      setIsCharging(false);
     };
 
-    const handlePointerUp = () => {
-      if (!isCharging || !selectedBall) return;
+    const handleContextMenu = (event: MouseEvent) => {
+      if (phase === 'idle' || !selectedBall) return;
+      event.preventDefault();
+      const surfaceY = selectedBall.position.y;
+      const point = pickOnTable(event.clientX, event.clientY, surfaceY);
+      if (!point) return;
+      const dir = new Vector3().subVectors(selectedBall.position, point).setY(0);
+      if (dir.lengthSq() === 0) return;
+      cueDirectionRef.current.copy(dir.normalize());
+      cueDistanceRef.current = THREE.MathUtils.clamp(
+        selectedBall.position.distanceTo(point),
+        2,
+        10
+      );
+      setPhase('aim');
+    };
 
-      const chargeTime = Math.min(Date.now() - chargeStartRef.current, maxCharge);
-      const forceMagnitude = (chargeTime / maxCharge) * 20; // 최대 힘 20
-      const force = cueDirectionRef.current.clone().multiplyScalar(forceMagnitude);
-      const ballId = (selectedBall.userData as any).ballId;
+    const handlePointerMove = (event: PointerEvent) => {
+      if (phase !== 'aim' || !selectedBall) return;
+      const surfaceY = selectedBall.position.y;
+      const point = pickOnTable(event.clientX, event.clientY, surfaceY);
+      if (!point) return;
+      const dir = new Vector3().subVectors(selectedBall.position, point).setY(0);
+      if (dir.lengthSq() === 0) return;
+      cueDirectionRef.current.copy(dir.normalize());
+    };
 
-      if (ballId) {
-        onBallHit(ballId, force);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && phase === 'aim' && selectedBall && !isCharging) {
+        setIsCharging(true);
+        setPhase('power');
+        chargeStartRef.current = Date.now();
       }
+      if (event.code === 'Escape') {
+        setSelectedBall(null);
+        setPhase('idle');
+        setIsCharging(false);
+      }
+    };
 
-      setIsCharging(false);
-      setSelectedBall(null);
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && isCharging && selectedBall) {
+        const chargeTime = Math.min(Date.now() - chargeStartRef.current, maxCharge);
+        const forceMagnitude = (chargeTime / maxCharge) * 20; // 최대 힘 20
+        const force = cueDirectionRef.current.clone().multiplyScalar(forceMagnitude);
+        const ballId = (selectedBall.userData as any).ballId;
+
+        if (ballId) {
+          onBallHit(ballId, force);
+        }
+
+        setIsCharging(false);
+        setPhase('aim');
+      }
     };
 
     const canvas = gl.domElement;
     canvas.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('pointerup', handlePointerUp);
+    canvas.addEventListener('contextmenu', handleContextMenu);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       canvas.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('pointerup', handlePointerUp);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [camera, gl.domElement, scene, isCharging, selectedBall, onBallHit]);
+  }, [camera, gl.domElement, scene, isCharging, phase, selectedBall, onBallHit]);
 
   return (
     <>

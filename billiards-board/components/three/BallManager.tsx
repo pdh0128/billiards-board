@@ -1,60 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Ball as BallComponent } from './Ball';
-import { Ball } from '@/types';
+import { useArticles } from '@/hooks/useArticles';
 import { useSocket } from '@/hooks/useSocket';
+import { Ball } from '@/types';
 
 export function BallManager() {
-  const [balls, setBalls] = useState<Ball[]>([]);
+  const { balls, addBall, removeBall } = useArticles();
   const socket = useSocket();
+  const [newBallIds, setNewBallIds] = useState<Set<string>>(new Set());
+  const initialLoadRef = useRef(true);
 
   useEffect(() => {
     if (!socket) return;
 
-    // 초기 상태 요청
-    socket.emit('requestSync');
-
-    // 상태 동기화
-    socket.on('syncState', (data: { articles: any[]; comments: any[] }) => {
-      const newBalls: Ball[] = [
-        ...data.articles.map((article) => ({
-          id: article.id,
-          type: 'article' as const,
-          content: article.content,
-          position: {
-            x: article.positionX,
-            y: article.positionY,
-            z: article.positionZ,
-          },
-          radius: article.radius,
-          userId: article.userId,
-          createdAt: new Date(article.createdAt),
-          isDeleted: article.isDeleted,
-        })),
-        ...data.comments.map((comment) => ({
-          id: comment.id,
-          type: 'comment' as const,
-          content: comment.content,
-          position: {
-            x: comment.positionX,
-            y: comment.positionY,
-            z: comment.positionZ,
-          },
-          radius: comment.radius,
-          userId: comment.userId,
-          createdAt: new Date(comment.createdAt),
-          isDeleted: comment.isDeleted,
-          articleId: comment.articleId,
-          path: comment.path,
-          depth: comment.depth,
-        })),
-      ];
-
-      setBalls(newBalls.filter((b) => !b.isDeleted));
-    });
-
-    // 새 글 생성
+    // 새 글 생성 이벤트
     socket.on('createArticle', (article: any) => {
       const newBall: Ball = {
         id: article.id,
@@ -70,10 +31,23 @@ export function BallManager() {
         createdAt: new Date(article.createdAt),
         isDeleted: false,
       };
-      setBalls((prev) => [...prev, newBall]);
+
+      addBall(newBall);
+
+      // 새 공 표시
+      setNewBallIds((prev) => new Set(prev).add(article.id));
+
+      // 3초 후 새 공 표시 제거
+      setTimeout(() => {
+        setNewBallIds((prev) => {
+          const updated = new Set(prev);
+          updated.delete(article.id);
+          return updated;
+        });
+      }, 3000);
     });
 
-    // 새 댓글 생성
+    // 새 댓글 생성 이벤트
     socket.on('createComment', (comment: any) => {
       const newBall: Ball = {
         id: comment.id,
@@ -92,31 +66,53 @@ export function BallManager() {
         path: comment.path,
         depth: comment.depth,
       };
-      setBalls((prev) => [...prev, newBall]);
+
+      addBall(newBall);
+
+      // 새 공 표시
+      setNewBallIds((prev) => new Set(prev).add(comment.id));
+
+      setTimeout(() => {
+        setNewBallIds((prev) => {
+          const updated = new Set(prev);
+          updated.delete(comment.id);
+          return updated;
+        });
+      }, 3000);
     });
 
     // 삭제 이벤트
     socket.on('deleteArticle', (data: { id: string }) => {
-      setBalls((prev) => prev.filter((b) => b.id !== data.id));
+      removeBall(data.id);
     });
 
     socket.on('deleteComment', (data: { id: string }) => {
-      setBalls((prev) => prev.filter((b) => b.id !== data.id));
+      removeBall(data.id);
     });
 
     return () => {
-      socket.off('syncState');
       socket.off('createArticle');
       socket.off('createComment');
       socket.off('deleteArticle');
       socket.off('deleteComment');
     };
-  }, [socket]);
+  }, [socket, addBall, removeBall]);
+
+  // 초기 로딩 시에는 애니메이션 없음
+  useEffect(() => {
+    if (balls.length > 0 && initialLoadRef.current) {
+      initialLoadRef.current = false;
+    }
+  }, [balls]);
 
   return (
     <>
       {balls.map((ball) => (
-        <BallComponent key={ball.id} ball={ball} />
+        <BallComponent
+          key={ball.id}
+          ball={ball}
+          isNew={newBallIds.has(ball.id)}
+        />
       ))}
     </>
   );

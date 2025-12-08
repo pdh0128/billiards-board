@@ -6,7 +6,7 @@ import { BallManager } from './BallManager';
 
 export function Scene() {
   return (
-    <div className="w-full h-screen">
+    <div className="w-full h-screen absolute inset-0">
       <Canvas>
         <PerspectiveCamera makeDefault position={[0, 5, 10]} />
         <OrbitControls enableDamping dampingFactor={0.05} />

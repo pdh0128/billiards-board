@@ -1,79 +1,44 @@
-import { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { prisma } from './prisma';
 
-let io: SocketIOServer | null = null;
-
-export function initSocketServer(httpServer: HTTPServer) {
-  if (io) return io;
-
-  io = new SocketIOServer(httpServer, {
-    cors: {
-      origin: process.env.NEXTAUTH_URL || 'http://localhost:3000',
-      methods: ['GET', 'POST'],
-    },
-  });
-
-  io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
-
-    // 초기 상태 동기화 요청
-    socket.on('requestSync', async () => {
-      try {
-        const articles = await prisma.article.findMany({
-          where: { isDeleted: false },
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        });
-
-        const comments = await prisma.comment.findMany({
-          where: { isDeleted: false },
-          orderBy: { createdAt: 'desc' },
-          take: 100,
-        });
-
-        socket.emit('syncState', { articles, comments });
-      } catch (error) {
-        console.error('Sync error:', error);
-      }
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
-    });
-  });
-
-  return io;
-}
-
-export function getIO() {
-  if (!io) {
-    throw new Error('Socket.IO not initialized');
+// global io 인스턴스를 가져옴 (server.js에서 설정됨)
+function getIO(): SocketIOServer | null {
+  if (typeof global !== 'undefined' && (global as any).io) {
+    return (global as any).io;
   }
-  return io;
+  return null;
 }
 
 // 브로드캐스트 헬퍼 함수들
 export function broadcastArticleCreated(article: any) {
+  const io = getIO();
   if (io) {
     io.emit('createArticle', article);
+    console.log('📢 Broadcasted createArticle:', article.id);
+  } else {
+    console.warn('⚠️  Socket.IO not available for broadcast');
   }
 }
 
 export function broadcastCommentCreated(comment: any) {
+  const io = getIO();
   if (io) {
     io.emit('createComment', comment);
+    console.log('📢 Broadcasted createComment:', comment.id);
   }
 }
 
 export function broadcastArticleDeleted(articleId: string) {
+  const io = getIO();
   if (io) {
     io.emit('deleteArticle', { id: articleId });
+    console.log('📢 Broadcasted deleteArticle:', articleId);
   }
 }
 
 export function broadcastCommentDeleted(commentId: string) {
+  const io = getIO();
   if (io) {
     io.emit('deleteComment', { id: commentId });
+    console.log('📢 Broadcasted deleteComment:', commentId);
   }
 }

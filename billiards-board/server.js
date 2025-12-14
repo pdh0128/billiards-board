@@ -33,9 +33,21 @@ app.prepare().then(() => {
 
   // 연결된 플레이어 맵
   const players = new Map(); // socket.id -> { id, nickname, color, joinedAt }
+  // 주기적 브로드캐스트 (누락 방지)
+  setInterval(() => {
+    if (players.size > 0) {
+      console.log('🔁 periodic syncPlayers', Array.from(players.values()));
+      io.emit('syncPlayers', Array.from(players.values()));
+    }
+  }, 5000);
 
   io.on('connection', (socket) => {
     console.log(`✅ Client connected: ${socket.id}`);
+
+    const authPlayer = socket.handshake.auth?.player;
+    if (authPlayer) {
+      players.set(socket.id, { ...authPlayer, socketId: socket.id });
+    }
 
     // 새 연결에 현재 플레이어 목록 전달
     socket.emit('syncPlayers', Array.from(players.values()));

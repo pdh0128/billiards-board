@@ -7,7 +7,7 @@ import { useSocket } from '@/hooks/useSocket';
 import { Ball } from './Ball';
 import { authHeaders, getAuthToken, getUserIdFromToken } from '@/utils/client-auth';
 import { useGame } from '@/contexts/game-context';
-import { useAuth } from '@/contexts/useAuth';
+import { setSocketAuth } from '@/hooks/useSocket';
 
 interface TableSize {
   width: number;
@@ -68,7 +68,7 @@ interface PositionUpdate {
 }
 
 export function BallManager({ table, toolMode, onReadThread }: Props) {
-  const { balls, addBall, removeBall, updateBall } = useArticles();
+  const { balls, addBall, removeBall, updateBall, refresh } = useArticles();
   const socket = useSocket();
   const { myPlayer, syncPlayers } = useGame();
   const myUserId = getUserIdFromToken();
@@ -190,6 +190,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     socket.on('syncPlayers', (players: any[]) => {
       console.log('[socket] syncPlayers', players);
       syncPlayers(players);
+      refresh(); // 플레이어 목록 갱신 시 글/댓글도 새로고침
     });
 
     socket.on('updatePosition', (updates: PositionUpdate[]) => {
@@ -231,6 +232,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   useEffect(() => {
     if (!socket || !myPlayer) return;
     const joinPayload = { ...myPlayer, socketId: socket.id };
+    setSocketAuth(joinPayload);
     socket.emit('join', joinPayload);
     socket.emit('requestPlayers');
   }, [socket, myPlayer]);
@@ -238,11 +240,20 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   // 주기적으로 플레이어 목록 요청 (네트워크/연결 문제 대비)
   useEffect(() => {
     if (!socket) return;
+    let attempts = 0;
     const interval = setInterval(() => {
       socket.emit('requestPlayers');
+      if (myPlayer) {
+        const joinPayload = { ...myPlayer, socketId: socket.id };
+        socket.emit('join', joinPayload);
+      }
+      attempts += 1;
+      if (attempts > 6) {
+        clearInterval(interval); // 30초 후 중단
+      }
     }, 5000);
     return () => clearInterval(interval);
-  }, [socket]);
+  }, [socket, myPlayer]);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {

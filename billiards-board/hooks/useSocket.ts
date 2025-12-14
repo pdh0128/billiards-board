@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 let globalSocket: Socket | null = null;
+let socketAuth: any = null;
+
+export function setSocketAuth(auth: any) {
+  socketAuth = auth;
+  if (globalSocket && globalSocket.connected) {
+    globalSocket.emit('join', auth);
+  }
+}
 
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(globalSocket);
@@ -13,6 +21,7 @@ export function useSocket() {
     if (!globalSocket) {
       globalSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000', {
         autoConnect: true,
+        auth: socketAuth ? { player: socketAuth } : undefined,
       });
     }
 

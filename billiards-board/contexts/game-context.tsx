@@ -64,7 +64,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const joinGame = (nickname: string, userId?: string) => {
     const newPlayer: Player = {
-      id: userId ? `${userId}-${Date.now()}` : Math.random().toString(36).substr(2, 9),
+      id: userId ?? Math.random().toString(36).substr(2, 9),
       userId,
       nickname,
       color: COLORS[players.length % COLORS.length],

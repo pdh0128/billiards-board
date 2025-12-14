@@ -58,8 +58,14 @@ interface CommentPayload extends ArticlePayload {
   depth: number;
 }
 
+interface PositionUpdate {
+  id: string;
+  type: 'article' | 'comment';
+  position: { x: number; y: number; z: number };
+}
+
 export function BallManager({ table, toolMode, onReadThread }: Props) {
-  const { balls, addBall, removeBall } = useArticles();
+  const { balls, addBall, removeBall, updateBall } = useArticles();
   const socket = useSocket();
   const boardRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
@@ -171,13 +177,39 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       removeBall(data.id);
     });
 
+    socket.on('updatePosition', (updates: PositionUpdate[]) => {
+      updates.forEach((u) => {
+        if (u.type !== 'article') return;
+        updateBall(u.id, (prev) => ({
+          ...prev,
+          position: { x: u.position.x, y: u.position.y, z: u.position.z },
+        }));
+        const body = bodiesRef.current.get(u.id);
+        if (body) {
+          body.position.x = u.position.x;
+          body.position.y = u.position.z;
+          body.velocity.x = 0;
+          body.velocity.y = 0;
+        }
+      });
+      setRenderBalls(
+        Array.from(bodiesRef.current.values()).map((body) => ({
+          ball: body.ball,
+          position: { ...body.position },
+          radius: body.radius,
+          isNew: newBallIds.has(body.ball.id),
+        }))
+      );
+    });
+
     return () => {
       socket.off('createArticle');
       socket.off('createComment');
       socket.off('deleteArticle');
       socket.off('deleteComment');
+      socket.off('updatePosition');
     };
-  }, [socket, addBall, removeBall]);
+  }, [socket, addBall, removeBall, updateBall, newBallIds]);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {

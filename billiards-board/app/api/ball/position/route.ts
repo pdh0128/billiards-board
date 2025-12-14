@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { broadcastPositions } from '@/lib/socket-server';
 
 type UpdatePayload = {
   id: string;
@@ -41,6 +42,9 @@ export async function POST(request: NextRequest) {
         });
       })
     );
+
+    // 실시간 동기화
+    broadcastPositions(updates);
 
     return NextResponse.json({ success: true });
   } catch (error) {

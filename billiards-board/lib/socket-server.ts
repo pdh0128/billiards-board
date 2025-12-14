@@ -42,3 +42,12 @@ export function broadcastCommentDeleted(commentId: string) {
     console.log('📢 Broadcasted deleteComment:', commentId);
   }
 }
+
+export function broadcastPositions(
+  updates: Array<{ id: string; type: 'article' | 'comment'; position: { x: number; y: number; z: number } }>
+) {
+  const io = getIO();
+  if (io) {
+    io.emit('updatePosition', updates);
+  }
+}

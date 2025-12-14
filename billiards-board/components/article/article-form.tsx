@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useGame } from '@/contexts/game-context';
+import { getAuthToken } from '@/utils/client-auth';
 
 interface ArticleFormProps {
   onSuccess?: () => void;
@@ -40,11 +41,13 @@ export function ArticleForm({ onSuccess }: ArticleFormProps) {
 
     try {
       const startPosition = myPlayer ? getPlayerStartPosition(myPlayer.id) : null;
+      const token = getAuthToken();
 
       const response = await fetch('/api/article', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           content: content.trim(),

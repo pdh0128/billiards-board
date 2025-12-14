@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateNonCollidingPosition } from '@/utils/position';
 import { broadcastArticleCreated } from '@/lib/socket-server';
+import { getUserFromRequest } from '@/lib/auth-jwt';
 
 // GET - 모든 글 조회 (페이지네이션)
 export async function GET(request: NextRequest) {
@@ -64,13 +64,12 @@ export async function GET(request: NextRequest) {
 // POST - 새 글 작성
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    let userId = session?.user?.id;
-
-    if (!userId) {
-      // 세션이 없으면 익명 사용자 자동 발급
-      const user = await prisma.user.create({ data: {} });
-      userId = user.id;
+    const user = await getUserFromRequest(request);
+    if (!user?.id) {
+      return NextResponse.json(
+        { success: false, error: 'Login required' },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
@@ -150,7 +149,7 @@ export async function POST(request: NextRequest) {
     const article = await prisma.article.create({
       data: {
         content: content.trim(),
-        userId,
+        userId: user.id,
         positionX: position.x,
         positionY: position.y,
         positionZ: position.z,

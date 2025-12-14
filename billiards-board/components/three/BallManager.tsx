@@ -5,6 +5,7 @@ import { Ball as BallType } from '@/types';
 import { useArticles } from '@/hooks/useArticles';
 import { useSocket } from '@/hooks/useSocket';
 import { Ball } from './Ball';
+import { authHeaders, getAuthToken } from '@/utils/client-auth';
 
 interface TableSize {
   width: number;
@@ -315,7 +316,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       try {
         await fetch('/api/ball/position', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ updates }),
         });
       } catch (error) {
@@ -339,7 +340,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       try {
         await fetch('/api/ball/position', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ updates }),
         });
       } catch (error) {
@@ -376,7 +377,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     try {
       const response = await fetch('/api/comment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
           content: comment.content,
           articleId: comment.articleId,
@@ -606,7 +607,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     }));
     fetch('/api/ball/position', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ updates }),
     })
       .catch((err) => console.error('Failed to persist positions (turn end)', err))

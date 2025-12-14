@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generatePath, getDepthFromPath } from '@/utils/path';
+import { getUserFromRequest } from '@/lib/auth-jwt';
 
 // GET - 댓글 목록
 export async function GET(request: NextRequest) {
@@ -39,8 +40,15 @@ export async function POST(request: NextRequest) {
       parentPath,
       position,
       radius = 0.5,
-      userId,
     } = body;
+
+    const user = await getUserFromRequest(request);
+    if (!user?.id) {
+      return NextResponse.json(
+        { success: false, error: 'Login required' },
+        { status: 401 }
+      );
+    }
 
     if (!articleId || typeof articleId !== 'string') {
       return NextResponse.json(
@@ -87,7 +95,7 @@ export async function POST(request: NextRequest) {
       data: {
         content: trimmed,
         articleId,
-        userId: userId || 'system', // 게임 이벤트 시 시스템 사용자로 기록
+        userId: user.id,
         path,
         depth,
         positionX: position?.x ?? 0,

@@ -10,9 +10,11 @@ interface NicknameEntryProps {
 
 export function NicknameEntry({ onEnter }: NicknameEntryProps) {
   const [nickname, setNickname] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -31,7 +33,47 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
       return;
     }
 
-    onEnter(nickname.trim());
+    if (password.length < 4) {
+      setError('비밀번호는 4글자 이상이어야 합니다');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        username: nickname.trim(),
+        password,
+      };
+      // 먼저 로그인 시도, 실패하면 회원가입
+      let res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || '인증에 실패했습니다');
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jwt', data.data.token);
+      }
+
+      onEnter(nickname.trim());
+    } catch (err: any) {
+      setError(err.message || '인증에 실패했습니다');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -47,20 +89,36 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="nickname" className="block text-sm font-medium text-gray-300 mb-2">
-              닉네임
-            </label>
-            <input
-              id="nickname"
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="닉네임 입력..."
-              className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
-              maxLength={20}
-              autoFocus
-            />
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="nickname" className="block text-sm font-medium text-gray-300 mb-2">
+                닉네임 (아이디)
+              </label>
+              <input
+                id="nickname"
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="닉네임 입력..."
+                className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                maxLength={20}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+                비밀번호 (최소 4자)
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="비밀번호 입력..."
+                className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                maxLength={50}
+              />
+            </div>
             {error && (
               <p className="text-red-400 text-sm mt-2">{error}</p>
             )}
@@ -69,10 +127,10 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
           <Button
             type="submit"
             className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 text-lg font-semibold"
-            disabled={!nickname.trim()}
+            disabled={!nickname.trim() || !password || loading}
           >
             <Play className="h-6 w-6 mr-2" />
-            게임 참여
+            {loading ? '로그인 중...' : '게임 참여'}
           </Button>
         </form>
 

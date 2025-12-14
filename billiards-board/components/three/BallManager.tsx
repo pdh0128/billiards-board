@@ -5,7 +5,9 @@ import { Ball as BallType } from '@/types';
 import { useArticles } from '@/hooks/useArticles';
 import { useSocket } from '@/hooks/useSocket';
 import { Ball } from './Ball';
-import { authHeaders, getAuthToken } from '@/utils/client-auth';
+import { authHeaders, getAuthToken, getUserIdFromToken } from '@/utils/client-auth';
+import { useGame } from '@/contexts/game-context';
+import { useAuth } from '@/contexts/useAuth';
 
 interface TableSize {
   width: number;
@@ -68,6 +70,8 @@ interface PositionUpdate {
 export function BallManager({ table, toolMode, onReadThread }: Props) {
   const { balls, addBall, removeBall, updateBall } = useArticles();
   const socket = useSocket();
+  const { myPlayer, syncPlayers } = useGame();
+  const myUserId = getUserIdFromToken();
   const boardRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
   const ballsRef = useRef<BallType[]>([]);
@@ -178,6 +182,10 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       removeBall(data.id);
     });
 
+    socket.on('syncPlayers', (players: any[]) => {
+      syncPlayers(players);
+    });
+
     socket.on('updatePosition', (updates: PositionUpdate[]) => {
       updates.forEach((u) => {
         if (u.type !== 'article') return;
@@ -209,8 +217,14 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       socket.off('deleteArticle');
       socket.off('deleteComment');
       socket.off('updatePosition');
+      socket.off('syncPlayers');
     };
-  }, [socket, addBall, removeBall, updateBall, newBallIds]);
+  }, [socket, addBall, removeBall, updateBall, newBallIds, syncPlayers]);
+
+  useEffect(() => {
+    if (!socket || !myPlayer) return;
+    socket.emit('join', myPlayer);
+  }, [socket, myPlayer]);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
@@ -640,6 +654,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   const handleAimStart = useCallback(
     (ball: BallType, clientX: number, clientY: number) => {
       if (toolMode !== 'cue' || ball.type !== 'article' || isLocked) return;
+      if (myUserId && ball.userId && ball.userId !== myUserId) return;
       const pointer = clientToWorld(clientX, clientY);
       const body = bodiesRef.current.get(ball.id);
       if (!pointer || !body) return;
@@ -650,7 +665,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       });
       setAimedBallId(ball.id);
     },
-    [clientToWorld, toolMode, isLocked]
+    [clientToWorld, toolMode, isLocked, myUserId]
   );
 
   useEffect(() => {

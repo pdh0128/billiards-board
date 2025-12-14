@@ -2,6 +2,7 @@ const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server } = require('socket.io');
+const { prisma } = require('./lib/prisma');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -30,28 +31,21 @@ app.prepare().then(() => {
     },
   });
 
-  // 연결된 클라이언트 수
-  let connectedClients = 0;
+  // 연결된 플레이어 맵
+  const players = new Map(); // socket.id -> { id, nickname, color, joinedAt }
 
   io.on('connection', (socket) => {
-    connectedClients++;
-    console.log(`✅ Client connected: ${socket.id} (Total: ${connectedClients})`);
+    console.log(`✅ Client connected: ${socket.id}`);
 
-    // 초기 상태 동기화 요청
-    socket.on('requestSync', async () => {
-      try {
-        // Prisma는 서버 사이드에서만 사용 가능
-        // API를 통해 데이터를 가져오거나, 여기서 직접 Prisma를 사용
-        console.log('Sync state requested by:', socket.id);
-        // socket.emit('syncState', { articles: [], comments: [] });
-      } catch (error) {
-        console.error('Sync error:', error);
-      }
+    socket.on('join', (player) => {
+      players.set(socket.id, { ...player, socketId: socket.id });
+      io.emit('syncPlayers', Array.from(players.values()));
     });
 
     socket.on('disconnect', () => {
-      connectedClients--;
-      console.log(`❌ Client disconnected: ${socket.id} (Total: ${connectedClients})`);
+      players.delete(socket.id);
+      io.emit('syncPlayers', Array.from(players.values()));
+      console.log(`❌ Client disconnected: ${socket.id}`);
     });
   });
 

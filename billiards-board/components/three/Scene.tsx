@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { BallManager } from './BallManager';
 import { ToolSelector } from '../game/tool-selector';
 import { Ball } from '@/types';
+import { useGame } from '@/contexts/game-context';
 
 export function Scene() {
   const TABLE_WIDTH = 80;
@@ -15,6 +16,7 @@ export function Scene() {
     comments: Ball[];
     focusId: string;
   } | null>(null);
+  const { players, myPlayer } = useGame();
 
   const handleToolChange = (mode: 'cue' | 'hand') => {
     setToolMode(mode);
@@ -53,6 +55,23 @@ export function Scene() {
           <span>최상위 댓글 (대댓글 수에 따라 커집니다)</span>
         </div>
         <div className="text-slate-400">게시판은 2D 평면으로 단순화되어 누구나 바로 플레이 가능</div>
+      </div>
+
+      <div className="absolute top-20 right-4 z-50 pointer-events-none">
+        <div className="bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-100 min-w-[140px]">
+          <div className="font-semibold text-slate-200 mb-1">접속 중</div>
+          <div className="space-y-1">
+            {players.map((p) => (
+              <div
+                key={p.id}
+                className={`flex items-center gap-2 ${myPlayer?.id === p.id ? 'text-emerald-300 font-semibold' : 'text-slate-200'}`}
+              >
+                <span className="h-2.5 w-2.5 rounded-full border border-white/30" style={{ background: p.color }} />
+                <span className="truncate">{p.nickname}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <ToolSelector mode={toolMode} onChange={handleToolChange} />

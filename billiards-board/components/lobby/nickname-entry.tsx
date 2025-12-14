@@ -66,6 +66,9 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
 
       if (typeof window !== 'undefined') {
         localStorage.setItem('jwt', data.data.token);
+        if (data.data.user?.id) {
+          localStorage.setItem('userId', data.data.user.id);
+        }
       }
 
       onEnter(nickname.trim());

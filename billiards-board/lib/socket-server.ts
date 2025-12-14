@@ -51,3 +51,10 @@ export function broadcastPositions(
     io.emit('updatePosition', updates);
   }
 }
+
+export function broadcastPlayers(players: Array<{ id: string; nickname: string; color: string; socketId?: string }>) {
+  const io = getIO();
+  if (io) {
+    io.emit('syncPlayers', players);
+  }
+}

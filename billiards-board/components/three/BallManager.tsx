@@ -75,6 +75,10 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   const [renderBalls, setRenderBalls] = useState<RenderBall[]>([]);
   const [aimedBallId, setAimedBallId] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
+  const [pendingTurnSave, setPendingTurnSave] = useState(false);
+  const [strikeProgress, setStrikeProgress] = useState(0);
+  const strikeRafRef = useRef<number>();
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const [boardSize, setBoardSize] = useState<{ width: number; height: number }>({
     width: 0,
     height: 0,
@@ -547,12 +551,35 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       );
       if (!moving) {
         setIsLocked(false);
+        setPendingTurnSave(true);
         clearInterval(timer);
       }
     }, 200);
 
     return () => clearInterval(timer);
   }, [isLocked]);
+
+  // 턴 종료 시 위치 일괄 저장
+  useEffect(() => {
+    if (!pendingTurnSave) return;
+    const bodies = Array.from(bodiesRef.current.values()).filter((b) => b.ball.type === 'article');
+    if (bodies.length === 0) {
+      setPendingTurnSave(false);
+      return;
+    }
+    const updates = bodies.map((b) => ({
+      id: b.ball.id,
+      type: 'article' as const,
+      position: { x: b.position.x, y: 0, z: b.position.y },
+    }));
+    fetch('/api/ball/position', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    })
+      .catch((err) => console.error('Failed to persist positions (turn end)', err))
+      .finally(() => setPendingTurnSave(false));
+  }, [pendingTurnSave]);
 
   useEffect(() => {
     let last = performance.now();
@@ -570,6 +597,12 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [stepPhysics]);
+
+  useEffect(() => {
+    return () => {
+      if (strikeRafRef.current) cancelAnimationFrame(strikeRafRef.current);
+    };
+  }, []);
 
   const handleAimStart = useCallback(
     (ball: BallType, clientX: number, clientY: number) => {
@@ -606,17 +639,50 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       }
 
       const pointer = clientToWorld(event.clientX, event.clientY) ?? aimState.pointer;
-      const dx = pointer.x - body.position.x;
-      const dy = pointer.y - body.position.y;
-      const dist = Math.hypot(dx, dy);
+      const dragX = body.position.x - pointer.x;
+      const dragY = body.position.y - pointer.y;
+      const dist = Math.hypot(dragX, dragY);
       if (dist > 0.05) {
         const maxPull = 18;
         const clamped = Math.min(dist, maxPull);
         const strength = (clamped / maxPull) * 16; // 더 많이 당길수록 강하게
-        // 드래그한 반대 방향으로 힘을 가해 앞으로 나가게 함
-        body.velocity.x -= (dx / dist) * strength;
-        body.velocity.y -= (dy / dist) * strength;
+        const nx = dragX / dist;
+        const ny = dragY / dist;
+        // 드래그한 반대 방향(공 -> 드래그 시작점)으로 힘을 가해 앞으로 나가게 함
+        body.velocity.x += nx * strength;
+        body.velocity.y += ny * strength;
         setIsLocked(true);
+        // 큐 밀림 애니메이션 및 소리
+        const start = performance.now();
+        const duration = 140;
+        if (strikeRafRef.current) cancelAnimationFrame(strikeRafRef.current);
+        const tick = (now: number) => {
+          const progress = Math.min((now - start) / duration, 1);
+          setStrikeProgress(progress);
+          if (progress < 1) {
+            strikeRafRef.current = requestAnimationFrame(tick);
+          } else {
+            setStrikeProgress(0);
+          }
+        };
+        strikeRafRef.current = requestAnimationFrame(tick);
+        try {
+          if (!audioCtxRef.current) {
+            audioCtxRef.current = new AudioContext();
+          }
+          const ctx = audioCtxRef.current;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.value = 420;
+          gain.gain.setValueAtTime(0.14, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.12);
+        } catch (err) {
+          console.warn('Audio init failed', err);
+        }
       }
       setAimState(null);
       setAimedBallId(null);
@@ -677,9 +743,12 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
         const ballRadiusPx = body ? body.radius * unit : 12;
         const cueLength = 220;
         const pullScale = Math.min(len, 18);
-        const offset = ballRadiusPx + 24 + pullScale * 4; // 더 멀리 당길수록 큐를 더 뒤로 이동
-        const centerX = aimLine.start.x - nx * (offset + cueLength / 2);
-        const centerY = aimLine.start.y - ny * (offset + cueLength / 2);
+        const offsetBase = ballRadiusPx + 24 + pullScale * 4; // 더 멀리 당길수록 큐를 더 뒤로 이동
+        const forwardTravel = pullScale * 6;
+        const eased = 1 - Math.pow(1 - strikeProgress, 2); // 빠르게 치고 천천히 멈춤
+        const animatedOffset = offsetBase - forwardTravel * eased;
+        const centerX = aimLine.start.x - nx * (animatedOffset + cueLength / 2);
+        const centerY = aimLine.start.y - ny * (animatedOffset + cueLength / 2);
         const angleDeg = (Math.atan2(ny, nx) * 180) / Math.PI;
         return { x: centerX, y: centerY, angle: angleDeg, length: cueLength };
       })()

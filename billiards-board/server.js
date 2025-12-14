@@ -37,9 +37,18 @@ app.prepare().then(() => {
   io.on('connection', (socket) => {
     console.log(`✅ Client connected: ${socket.id}`);
 
+    // 새 연결에 현재 플레이어 목록 전달
+    socket.emit('syncPlayers', Array.from(players.values()));
+
     socket.on('join', (player) => {
       players.set(socket.id, { ...player, socketId: socket.id });
+      console.log('📥 join', player);
       io.emit('syncPlayers', Array.from(players.values()));
+    });
+
+    socket.on('requestPlayers', () => {
+      console.log('📥 requestPlayers from', socket.id);
+      socket.emit('syncPlayers', Array.from(players.values()));
     });
 
     socket.on('disconnect', () => {

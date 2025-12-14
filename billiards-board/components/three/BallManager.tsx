@@ -115,6 +115,11 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   useEffect(() => {
     if (!socket) return;
 
+    socket.on('connect', () => {
+      console.log('[socket] connected', socket.id);
+      socket.emit('requestPlayers');
+    });
+
     socket.on('createArticle', (article: ArticlePayload) => {
       const newBall: BallType = {
         id: article.id,
@@ -183,6 +188,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     });
 
     socket.on('syncPlayers', (players: any[]) => {
+      console.log('[socket] syncPlayers', players);
       syncPlayers(players);
     });
 
@@ -212,6 +218,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     });
 
     return () => {
+      socket.off('connect');
       socket.off('createArticle');
       socket.off('createComment');
       socket.off('deleteArticle');
@@ -219,12 +226,23 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       socket.off('updatePosition');
       socket.off('syncPlayers');
     };
-  }, [socket, addBall, removeBall, updateBall, newBallIds, syncPlayers]);
+  }, [socket, addBall, removeBall, updateBall, syncPlayers]);
 
   useEffect(() => {
     if (!socket || !myPlayer) return;
-    socket.emit('join', myPlayer);
+    const joinPayload = { ...myPlayer, socketId: socket.id };
+    socket.emit('join', joinPayload);
+    socket.emit('requestPlayers');
   }, [socket, myPlayer]);
+
+  // 주기적으로 플레이어 목록 요청 (네트워크/연결 문제 대비)
+  useEffect(() => {
+    if (!socket) return;
+    const interval = setInterval(() => {
+      socket.emit('requestPlayers');
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [socket]);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {

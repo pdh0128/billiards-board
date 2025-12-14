@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play } from 'lucide-react';
+import { getUserIdFromToken } from '@/utils/client-auth';
 
 interface NicknameEntryProps {
-  onEnter: (nickname: string) => void;
+  onEnter: (nickname: string, userId?: string) => void;
 }
 
 export function NicknameEntry({ onEnter }: NicknameEntryProps) {
@@ -13,6 +14,7 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,24 +42,13 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
 
     setLoading(true);
     try {
-      const payload = {
-        username: nickname.trim(),
-        password,
-      };
-      // 먼저 로그인 시도, 실패하면 회원가입
-      let res = await fetch('/api/auth/login', {
+      const payload = { username: nickname.trim(), password };
+      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/signup';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
-      if (!res.ok) {
-        res = await fetch('/api/auth/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      }
 
       const data = await res.json();
       if (!data.success) {
@@ -71,7 +62,9 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
         }
       }
 
-      onEnter(nickname.trim());
+      const effectiveUserId = data.data.user?.id || getUserIdFromToken() || undefined;
+
+      onEnter(nickname.trim(), effectiveUserId);
     } catch (err: any) {
       setError(err.message || '인증에 실패했습니다');
     } finally {
@@ -133,14 +126,21 @@ export function NicknameEntry({ onEnter }: NicknameEntryProps) {
             disabled={!nickname.trim() || !password || loading}
           >
             <Play className="h-6 w-6 mr-2" />
-            {loading ? '로그인 중...' : '게임 참여'}
+            {loading ? '진행 중...' : mode === 'login' ? '로그인' : '회원가입'}
           </Button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-gray-700">
-          <p className="text-gray-500 text-sm text-center">
-            💡 여러 명이 참여하면 순서대로 턴이 돌아갑니다
-          </p>
+          <div className="flex items-center justify-between text-sm text-gray-400">
+            <span>💡 여러 명이 참여하면 순서대로 턴이 돌아갑니다</span>
+            <button
+              type="button"
+              className="text-blue-400 hover:text-blue-300 font-semibold"
+              onClick={() => setMode((prev) => (prev === 'login' ? 'signup' : 'login'))}
+            >
+              {mode === 'login' ? '회원가입으로 전환' : '로그인으로 전환'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

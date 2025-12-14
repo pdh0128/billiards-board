@@ -7,6 +7,7 @@ interface Player {
   nickname: string;
   color: string;
   joinedAt: number;
+  userId?: string;
   socketId?: string;
 }
 
@@ -15,7 +16,7 @@ interface GameContextType {
   currentPlayer: Player | null;
   myPlayer: Player | null;
   isMyTurn: boolean;
-  joinGame: (nickname: string) => void;
+  joinGame: (nickname: string, userId?: string) => void;
   nextTurn: () => void;
   syncPlayers: (players: Player[]) => void;
   getPlayerStartPosition: (playerId: string) => { x: number; y: number; z: number };
@@ -61,9 +62,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [myPlayer, setMyPlayer] = useState<Player | null>(null);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
 
-  const joinGame = (nickname: string) => {
+  const joinGame = (nickname: string, userId?: string) => {
     const newPlayer: Player = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: userId ? `${userId}-${Date.now()}` : Math.random().toString(36).substr(2, 9),
+      userId,
       nickname,
       color: COLORS[players.length % COLORS.length],
       joinedAt: Date.now(),

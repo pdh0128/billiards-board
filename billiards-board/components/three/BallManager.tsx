@@ -1,14 +1,10 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import type { RefObject } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { Mesh, Vector3 } from 'three';
-import { Ball as BallComponent } from './Ball';
-import { CueStick } from './CueStick';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Ball as BallType } from '@/types';
 import { useArticles } from '@/hooks/useArticles';
 import { useSocket } from '@/hooks/useSocket';
-import { Ball } from '@/types';
+import { Ball } from './Ball';
 
 interface TableSize {
   width: number;
@@ -21,50 +17,91 @@ type ToolMode = 'cue' | 'hand';
 interface Props {
   table: TableSize;
   toolMode: ToolMode;
-  onReadThread: (data: { article: Ball; comments: Ball[]; focusId: string }) => void;
+  onReadThread: (data: { article: BallType; comments: BallType[]; focusId: string }) => void;
 }
 
 interface PhysicsBody {
-  applyImpulse: (force: Vector3) => void;
-  position: Vector3;
-  velocity: Vector3;
+  position: { x: number; y: number };
+  velocity: { x: number; y: number };
   radius: number;
-  meshRef: RefObject<Mesh>;
-  ball: Ball;
+  ball: BallType;
   lastHitBy?: string;
+}
+
+interface AimState {
+  ballId: string;
+  origin: { x: number; y: number };
+  pointer: { x: number; y: number };
+}
+
+interface RenderBall {
+  ball: BallType;
+  position: { x: number; y: number };
+  radius: number;
+  isNew: boolean;
+}
+
+interface ArticlePayload {
+  id: string;
+  content: string;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  radius: number;
+  userId: string;
+  createdAt: string;
+}
+
+interface CommentPayload extends ArticlePayload {
+  articleId: string;
+  path: string;
+  depth: number;
 }
 
 export function BallManager({ table, toolMode, onReadThread }: Props) {
   const { balls, addBall, removeBall } = useArticles();
   const socket = useSocket();
-  const [newBallIds, setNewBallIds] = useState<Set<string>>(new Set());
-  const initialLoadRef = useRef(true);
+  const boardRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
-  const ballsRef = useRef<Ball[]>([]);
+  const ballsRef = useRef<BallType[]>([]);
   const pendingSavesRef = useRef<
-    Map<string, { id: string; type: 'article' | 'comment'; position: Vector3 }>
+    Map<string, { id: string; type: 'article' | 'comment'; position: { x: number; y: number } }>
   >(new Map());
-  const lastPersistedRef = useRef<Map<string, Vector3>>(new Map());
+  const lastPersistedRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const animationRef = useRef<number>();
+  const [frame, setFrame] = useState(0);
+  const [aimState, setAimState] = useState<AimState | null>(null);
+  const [newBallIds, setNewBallIds] = useState<Set<string>>(new Set());
+  const [renderBalls, setRenderBalls] = useState<RenderBall[]>([]);
+  const [aimedBallId, setAimedBallId] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
+  const [boardSize, setBoardSize] = useState<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
 
   useEffect(() => {
     ballsRef.current = balls;
   }, [balls]);
 
-  useEffect(() => {
-    balls.forEach((b) => {
-      const body = bodiesRef.current.get(b.id);
-      if (body) {
-        body.ball = b;
-      }
-    });
-  }, [balls]);
+  const pockets = useMemo(
+    () => [
+      { x: -table.width / 2 + 2, y: -table.depth / 2 + 2 },
+      { x: table.width / 2 - 2, y: -table.depth / 2 + 2 },
+      { x: -table.width / 2 + 2, y: 0 },
+      { x: table.width / 2 - 2, y: 0 },
+      { x: -table.width / 2 + 2, y: table.depth / 2 - 2 },
+      { x: table.width / 2 - 2, y: table.depth / 2 - 2 },
+    ],
+    [table.depth, table.width]
+  );
+  const pocketRadius = 1.8;
 
   useEffect(() => {
     if (!socket) return;
 
-    // 새 글 생성 이벤트
-    socket.on('createArticle', (article: any) => {
-      const newBall: Ball = {
+    socket.on('createArticle', (article: ArticlePayload) => {
+      const newBall: BallType = {
         id: article.id,
         type: 'article',
         content: article.content,
@@ -81,11 +118,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       };
 
       addBall(newBall);
-
-      // 새 공 표시
       setNewBallIds((prev) => new Set(prev).add(article.id));
-
-      // 3초 후 새 공 표시 제거
       setTimeout(() => {
         setNewBallIds((prev) => {
           const updated = new Set(prev);
@@ -95,9 +128,8 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       }, 3000);
     });
 
-    // 새 댓글 생성 이벤트
-    socket.on('createComment', (comment: any) => {
-      const newBall: Ball = {
+    socket.on('createComment', (comment: CommentPayload) => {
+      const newBall: BallType = {
         id: comment.id,
         type: 'comment',
         content: comment.content,
@@ -117,10 +149,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       };
 
       addBall(newBall);
-
-      // 새 공 표시
       setNewBallIds((prev) => new Set(prev).add(comment.id));
-
       setTimeout(() => {
         setNewBallIds((prev) => {
           const updated = new Set(prev);
@@ -130,7 +159,6 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       }, 3000);
     });
 
-    // 삭제 이벤트
     socket.on('deleteArticle', (data: { id: string }) => {
       removeBall(data.id);
     });
@@ -147,17 +175,22 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     };
   }, [socket, addBall, removeBall]);
 
-  // 초기 로딩 시에는 애니메이션 없음
   useEffect(() => {
-    if (balls.length > 0 && initialLoadRef.current) {
-      initialLoadRef.current = false;
+    const observer = new ResizeObserver((entries) => {
+      if (!entries[0]) return;
+      const rect = entries[0].contentRect;
+      setBoardSize({ width: rect.width, height: rect.height });
+    });
+    if (boardRef.current) {
+      observer.observe(boardRef.current);
     }
-  }, [balls]);
+    return () => observer.disconnect();
+  }, []);
 
   const commentCountByArticle = useMemo(() => {
     const map = new Map<string, number>();
     balls.forEach((b) => {
-      if (b.type === 'comment' && b.articleId) {
+      if (b.type === 'comment' && b.articleId && !b.isDeleted) {
         map.set(b.articleId, (map.get(b.articleId) ?? 0) + 1);
       }
     });
@@ -165,7 +198,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   }, [balls]);
 
   const computeRadius = useCallback(
-    (ball: Ball) => {
+    (ball: BallType) => {
       if (ball.type === 'article') {
         const count = commentCountByArticle.get(ball.id) ?? 0;
         return ball.radius + count * 0.2;
@@ -175,20 +208,63 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     [commentCountByArticle]
   );
 
-  const registerController = useCallback(
-    (id: string, body: PhysicsBody) => {
-      bodiesRef.current.set(id, body);
-      return () => bodiesRef.current.delete(id);
+  useEffect(() => {
+    const bodies = bodiesRef.current;
+    const ballIds = new Set(balls.map((b) => b.id));
+
+    balls.forEach((ball) => {
+      if (ball.type === 'comment') {
+        return; // 댓글은 보드에 공으로 렌더하지 않음
+      }
+      const radius = computeRadius(ball);
+      const existing = bodies.get(ball.id);
+      if (existing) {
+        existing.ball = ball;
+        existing.radius = radius;
+        existing.position = { x: ball.position.x, y: ball.position.z };
+      } else {
+        bodies.set(ball.id, {
+          position: { x: ball.position.x, y: ball.position.z },
+          velocity: { x: 0, y: 0 },
+          radius,
+          ball,
+        });
+      }
+    });
+
+    Array.from(bodies.keys()).forEach((id) => {
+      if (!ballIds.has(id)) {
+        bodies.delete(id);
+      }
+    });
+  }, [balls, computeRadius]);
+
+  const clientToWorld = useCallback(
+    (clientX: number, clientY: number) => {
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      const xNorm = (clientX - rect.left) / rect.width - 0.5;
+      const yNorm = (clientY - rect.top) / rect.height - 0.5;
+      return {
+        x: xNorm * table.width,
+        y: yNorm * table.depth,
+      };
     },
-    []
+    [table.depth, table.width]
   );
 
-  const handleBallHit = useCallback((ballId: string, force: Vector3) => {
-    const body = bodiesRef.current.get(ballId);
-    if (body) {
-      body.applyImpulse(force);
-    }
-  }, []);
+  const worldToScreen = useCallback(
+    (pos: { x: number; y: number }) => {
+      if (boardSize.width === 0 || boardSize.height === 0) {
+        return { x: 0, y: 0 };
+      }
+      return {
+        x: ((pos.x + table.width / 2) / table.width) * boardSize.width,
+        y: ((pos.y + table.depth / 2) / table.depth) * boardSize.height,
+      };
+    },
+    [boardSize.height, boardSize.width, table.depth, table.width]
+  );
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -196,7 +272,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
       const updates = Array.from(pendingSavesRef.current.values()).map((u) => ({
         id: u.id,
         type: u.type,
-        position: { x: u.position.x, y: u.position.y, z: u.position.z },
+        position: { x: u.position.x, y: 0, z: u.position.y },
       }));
       pendingSavesRef.current.clear();
 
@@ -214,8 +290,32 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     return () => clearInterval(interval);
   }, []);
 
+  // 주기적으로 모든 글 위치를 서버에 저장 (세션 재입장 시 위치 유지)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const bodies = Array.from(bodiesRef.current.values()).filter((b) => b.ball.type === 'article');
+      if (bodies.length === 0) return;
+      const updates = bodies.map((b) => ({
+        id: b.ball.id,
+        type: 'article' as const,
+        position: { x: b.position.x, y: 0, z: b.position.y },
+      }));
+      try {
+        await fetch('/api/ball/position', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates }),
+        });
+      } catch (error) {
+        console.error('Failed to persist ball positions (periodic)', error);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const getSubtreeComments = useCallback(
-    (root: Ball) => {
+    (root: BallType) => {
       if (root.type === 'article') {
         return ballsRef.current
           .filter((b) => b.type === 'comment' && b.articleId === root.id)
@@ -236,7 +336,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     []
   );
 
-  const persistComment = useCallback(async (comment: Ball, parentPath?: string, hitterUserId?: string) => {
+  const persistComment = useCallback(async (comment: BallType, parentPath?: string, hitterUserId?: string) => {
     try {
       const response = await fetch('/api/comment', {
         method: 'POST',
@@ -260,7 +360,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
           path: saved.path,
           depth: saved.depth,
           createdAt: new Date(saved.createdAt),
-        } as Ball;
+        } as BallType;
       }
     } catch (error) {
       console.error('Failed to persist comment', error);
@@ -269,7 +369,7 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   }, []);
 
   const handleReadBall = useCallback(
-    (ball: Ball) => {
+    (ball: BallType) => {
       const articleId = ball.type === 'article' ? ball.id : ball.articleId ?? ball.id;
       const article = ballsRef.current.find((b) => b.type === 'article' && b.id === articleId);
       if (!article) return;
@@ -283,17 +383,6 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     [onReadThread]
   );
 
-  // 포켓 좌표 (Scene의 포켓과 동일)
-  const pockets = [
-    new Vector3(-table.width / 2 + 2, 0, -table.depth / 2 + 2),
-    new Vector3(table.width / 2 - 2, 0, -table.depth / 2 + 2),
-    new Vector3(-table.width / 2 + 2, 0, 0),
-    new Vector3(table.width / 2 - 2, 0, 0),
-    new Vector3(-table.width / 2 + 2, 0, table.depth / 2 - 2),
-    new Vector3(table.width / 2 - 2, 0, table.depth / 2 - 2),
-  ];
-
-  const pocketRadius = 1.8;
   const spawnCommentFromPocket = useCallback(
     async (pocketed: PhysicsBody) => {
       const hitterId = pocketed.lastHitBy;
@@ -303,55 +392,17 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
 
       const parent = hitter.ball;
       const targetArticleId = parent.type === 'article' ? parent.id : parent.articleId ?? parent.id;
-      const parentPathForRoot = parent.type === 'article' ? undefined : parent.path;
-
-      const baseComment: Ball = {
-        id: `${pocketed.ball.id}-comment-${Date.now()}`,
-        type: 'comment',
-        content: pocketed.ball.content,
-        position: {
-          x: hitter.position.x + (Math.random() - 0.5) * 4,
-          y: parent.position.y,
-          z: hitter.position.z + (Math.random() - 0.5) * 4,
-        },
-        radius: Math.max(pocketed.radius * 0.8, 0.5),
-        commentsCount: 0,
-        userId: parent.userId,
-        createdAt: new Date(),
-        isDeleted: false,
-        articleId: targetArticleId,
-        path: undefined,
-        depth: (parent.depth ?? 0) + 1,
-      };
-
-      const savedRoot = await persistComment(baseComment, parentPathForRoot, hitter.ball.userId);
-      addBall(savedRoot);
-      setNewBallIds((prev) => {
-        const updated = new Set(prev);
-        updated.add(savedRoot.id);
-        return updated;
-      });
-
-      const pathMap = new Map<string, string>();
-      if (pocketed.ball.type === 'comment' && pocketed.ball.path) {
-        pathMap.set(pocketed.ball.path, savedRoot.path ?? '');
-      } else {
-        pathMap.set('ROOT', savedRoot.path ?? '');
-      }
-
+      // 댓글 전체를 흡수: 기존 댓글들을 타겟 글의 댓글로 복사
       const subtree = getSubtreeComments(pocketed.ball);
-      for (const comment of subtree) {
-        if (pocketed.ball.type === 'comment' && comment.id === pocketed.ball.id) {
-          continue; // root already handled
-        }
-        if (pocketed.ball.type === 'article' && !comment.path) continue;
+      const pathMap = new Map<string, string>();
 
+      for (const comment of subtree) {
         const oldParentPath = comment.path
           ? comment.path.split('.').slice(0, -1).join('.')
-          : 'ROOT';
-        const parentPath = pathMap.get(oldParentPath) ?? savedRoot.path;
+          : undefined;
+        const parentPath = oldParentPath ? pathMap.get(oldParentPath) : undefined;
 
-        const clone: Ball = {
+        const clone: BallType = {
           ...comment,
           id: `${comment.id}-moved-${Date.now()}`,
           articleId: targetArticleId,
@@ -360,7 +411,9 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
         };
 
         const saved = await persistComment(clone, parentPath, hitter.ball.userId);
-        pathMap.set(comment.path ?? comment.id, saved.path ?? '');
+        if (comment.path) {
+          pathMap.set(comment.path, saved.path ?? '');
+        }
         addBall(saved);
         setNewBallIds((prev) => {
           const updated = new Set(prev);
@@ -369,7 +422,6 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
         });
       }
 
-      // 원본 댓글 서브트리 제거
       const removeIds =
         pocketed.ball.type === 'article'
           ? subtree.map((c) => c.id)
@@ -383,125 +435,354 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
     [addBall, getSubtreeComments, persistComment, removeBall]
   );
 
-  // 물리 시뮬레이션 루프
-  useFrame((_, delta) => {
-    const bodies = Array.from(bodiesRef.current.values());
+  const stepPhysics = useCallback(
+    (delta: number) => {
+      const bodies = Array.from(bodiesRef.current.values());
 
-    // 충돌 감지 (구-구)
-    for (let i = 0; i < bodies.length; i++) {
-      for (let j = i + 1; j < bodies.length; j++) {
-        const a = bodies[i];
-        const b = bodies[j];
-        const diff = new Vector3().subVectors(a.position, b.position);
-        const dist = diff.length();
-        const minDist = a.radius + b.radius;
+      for (let i = 0; i < bodies.length; i++) {
+        for (let j = i + 1; j < bodies.length; j++) {
+          const a = bodies[i];
+          const b = bodies[j];
+          const dx = a.position.x - b.position.x;
+          const dy = a.position.y - b.position.y;
+          const dist = Math.hypot(dx, dy);
+          const minDist = a.radius + b.radius;
 
-        if (dist > 0 && dist < minDist) {
-          const normal = diff.normalize();
-          const overlap = minDist - dist;
+          if (dist > 0 && dist < minDist) {
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const overlap = minDist - dist;
 
-          // 위치 보정
-          a.position.addScaledVector(normal, overlap / 2);
-          b.position.addScaledVector(normal, -overlap / 2);
+            a.position.x += (nx * overlap) / 2;
+            a.position.y += (ny * overlap) / 2;
+            b.position.x -= (nx * overlap) / 2;
+            b.position.y -= (ny * overlap) / 2;
 
-          // 단순 탄성 충돌
-          const relativeVelocity = new Vector3().subVectors(a.velocity, b.velocity);
-          const speed = relativeVelocity.dot(normal);
-          if (speed < 0) {
-            const impulse = (2 * speed) / 2; // 동일 질량 가정
-            a.velocity.sub(normal.clone().multiplyScalar(impulse));
-            b.velocity.add(normal.clone().multiplyScalar(impulse));
+            const relVx = a.velocity.x - b.velocity.x;
+            const relVy = a.velocity.y - b.velocity.y;
+            const speed = relVx * nx + relVy * ny;
+            if (speed < 0) {
+              const impulse = (2 * speed) / 2;
+              a.velocity.x -= nx * impulse;
+              a.velocity.y -= ny * impulse;
+              b.velocity.x += nx * impulse;
+              b.velocity.y += ny * impulse;
+            }
+
+            a.lastHitBy = b.ball.id;
+            b.lastHitBy = a.ball.id;
           }
-
-          a.lastHitBy = b.ball.id;
-          b.lastHitBy = a.ball.id;
         }
       }
-    }
 
-    bodies.forEach((body) => {
-      body.position.addScaledVector(body.velocity, delta);
-      body.velocity.multiplyScalar(0.985);
+      bodies.forEach((body) => {
+        body.position.x += body.velocity.x * delta;
+        body.position.y += body.velocity.y * delta;
+        body.velocity.x *= 0.985;
+        body.velocity.y *= 0.985;
 
-      // 경계 충돌 (XZ)
-      const clamp = (coord: 'x' | 'z', limit: number) => {
-        if (body.position[coord] > limit) {
-          body.position[coord] = limit;
-          body.velocity[coord] *= -0.7;
-        } else if (body.position[coord] < -limit) {
-          body.position[coord] = -limit;
-          body.velocity[coord] *= -0.7;
+        const clampCoord = (coord: 'x' | 'y', limit: number) => {
+          if (body.position[coord] > limit) {
+            body.position[coord] = limit;
+            body.velocity[coord] *= -0.7;
+          } else if (body.position[coord] < -limit) {
+            body.position[coord] = -limit;
+            body.velocity[coord] *= -0.7;
+          }
+        };
+
+        clampCoord('x', table.width / 2 - body.radius);
+        clampCoord('y', table.depth / 2 - body.radius);
+
+        const inPocket = pockets.some((pocket) => {
+          const dx = pocket.x - body.position.x;
+          const dy = pocket.y - body.position.y;
+          return Math.hypot(dx, dy) < pocketRadius;
+        });
+
+        if (inPocket) {
+          spawnCommentFromPocket(body);
+          bodiesRef.current.delete(body.ball.id);
+          removeBall(body.ball.id);
+          return;
         }
-      };
 
-      clamp('x', table.width / 2 - body.radius);
-      clamp('z', table.depth / 2 - body.radius);
+        const speedSq = body.velocity.x * body.velocity.x + body.velocity.y * body.velocity.y;
+        const last = lastPersistedRef.current.get(body.ball.id);
+        if (speedSq < 0.0025) {
+          if (!last || Math.hypot(body.position.x - last.x, body.position.y - last.y) > 0.05) {
+            pendingSavesRef.current.set(body.ball.id, {
+              id: body.ball.id,
+              type: body.ball.type,
+              position: { x: body.position.x, y: body.position.y },
+            });
+            lastPersistedRef.current.set(body.ball.id, {
+              x: body.position.x,
+              y: body.position.y,
+            });
+          }
+        }
 
-      // 테이블 표면에 고정
-      body.position.y = body.ball.position.y;
-      body.velocity.y = 0;
+        body.ball.position = {
+          x: body.position.x,
+          y: 0,
+          z: body.position.y,
+        };
 
-      // 포켓 체크
-      const inPocket = pockets.some(
-        (pocket) => pocket.distanceTo(body.position) < pocketRadius
+        const radius = computeRadius(body.ball);
+        body.radius = radius;
+      });
+    },
+    [computeRadius, pockets, pocketRadius, removeBall, spawnCommentFromPocket, table.depth, table.width]
+  );
+
+  useEffect(() => {
+    if (!isLocked) return;
+    const timer = setInterval(() => {
+      const bodies = Array.from(bodiesRef.current.values());
+      const moving = bodies.some(
+        (b) =>
+          b.ball.type === 'article' &&
+          b.velocity.x * b.velocity.x + b.velocity.y * b.velocity.y > 0.0005
       );
+      if (!moving) {
+        setIsLocked(false);
+        clearInterval(timer);
+      }
+    }, 200);
 
-      if (inPocket) {
-        // 포켓에 빠진 공은 제거
-        spawnCommentFromPocket(body);
-        bodiesRef.current.delete(body.ball.id);
-        removeBall(body.ball.id);
+    return () => clearInterval(timer);
+  }, [isLocked]);
+
+  useEffect(() => {
+    let last = performance.now();
+
+    const loop = (time: number) => {
+      const delta = Math.max((time - last) / 1000, 0);
+      last = time;
+      stepPhysics(delta);
+      setFrame((f) => f + 1);
+      animationRef.current = requestAnimationFrame(loop);
+    };
+
+    animationRef.current = requestAnimationFrame(loop);
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, [stepPhysics]);
+
+  const handleAimStart = useCallback(
+    (ball: BallType, clientX: number, clientY: number) => {
+      if (toolMode !== 'cue' || ball.type !== 'article' || isLocked) return;
+      const pointer = clientToWorld(clientX, clientY);
+      const body = bodiesRef.current.get(ball.id);
+      if (!pointer || !body) return;
+      setAimState({
+        ballId: ball.id,
+        origin: { ...body.position },
+        pointer,
+      });
+      setAimedBallId(ball.id);
+    },
+    [clientToWorld, toolMode, isLocked]
+  );
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!aimState) return;
+      const pointer = clientToWorld(event.clientX, event.clientY);
+      if (pointer) {
+        setAimState((prev) => (prev ? { ...prev, pointer } : prev));
+      }
+    };
+
+    const handleUp = (event: PointerEvent) => {
+      if (!aimState) return;
+      const body = bodiesRef.current.get(aimState.ballId);
+      if (!body) {
+        setAimState(null);
+        setAimedBallId(null);
         return;
       }
 
-      if (body.meshRef.current) {
-        body.meshRef.current.position.copy(body.position);
-        // radius를 댓글 수에 따라 조정
-        const r = computeRadius(body.ball);
-        body.radius = r;
-        body.meshRef.current.scale.setScalar(r / body.ball.radius);
+      const pointer = clientToWorld(event.clientX, event.clientY) ?? aimState.pointer;
+      const dx = pointer.x - body.position.x;
+      const dy = pointer.y - body.position.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.05) {
+        const maxPull = 18;
+        const clamped = Math.min(dist, maxPull);
+        const strength = (clamped / maxPull) * 16; // 더 많이 당길수록 강하게
+        // 드래그한 반대 방향으로 힘을 가해 앞으로 나가게 함
+        body.velocity.x -= (dx / dist) * strength;
+        body.velocity.y -= (dy / dist) * strength;
+        setIsLocked(true);
       }
+      setAimState(null);
+      setAimedBallId(null);
+    };
 
-      // 위치 저장 스케줄링 (정지 상태에 가까운 경우만)
-      const speedSq = body.velocity.lengthSq();
-      const last = lastPersistedRef.current.get(body.ball.id);
-      if (speedSq < 0.0025) {
-        if (!last || last.distanceTo(body.position) > 0.05) {
-          pendingSavesRef.current.set(body.ball.id, {
-            id: body.ball.id,
-            type: body.ball.type,
-            position: body.position.clone(),
-          });
-          lastPersistedRef.current.set(body.ball.id, body.position.clone());
-        }
-      }
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [aimState, clientToWorld]);
 
-      // ball 데이터의 위치도 갱신 (댓글 생성 시 활용)
-      body.ball.position = {
-        x: body.position.x,
-        y: body.position.y,
-        z: body.position.z,
-      };
-    });
-  });
+  useEffect(() => {
+    setRenderBalls(
+      Array.from(bodiesRef.current.values()).map((body) => ({
+        ball: body.ball,
+        position: { ...body.position },
+        radius: body.radius,
+        isNew: newBallIds.has(body.ball.id),
+      }))
+    );
+  }, [frame, newBallIds]);
+
+  const aimLine = aimState
+    ? (() => {
+        const start = worldToScreen(aimState.origin);
+        const end = worldToScreen(aimState.pointer);
+        return { start, end };
+      })()
+    : null;
+
+  const unit =
+    boardSize.width && boardSize.height
+      ? Math.min(boardSize.width / (table.width || 1), boardSize.height / (table.depth || 1))
+      : 0;
+
+  const pullInfo = aimState
+    ? (() => {
+        const dx = aimState.pointer.x - aimState.origin.x;
+        const dy = aimState.pointer.y - aimState.origin.y;
+        const dist = Math.hypot(dx, dy);
+        const pct = Math.min(Math.round((Math.min(dist, 18) / 18) * 100), 100);
+        return { pct, dist };
+      })()
+    : null;
+
+  const cueVisual = aimLine
+    ? (() => {
+        if (!aimState) return null;
+        const dirX = aimState.origin.x - aimState.pointer.x;
+        const dirY = aimState.origin.y - aimState.pointer.y;
+        const len = Math.hypot(dirX, dirY);
+        if (len < 1) return null;
+        const nx = dirX / len; // pointer -> ball 방향 (공이 나아갈 방향)
+        const ny = dirY / len;
+        const body = bodiesRef.current.get(aimState.ballId);
+        const ballRadiusPx = body ? body.radius * unit : 12;
+        const cueLength = 220;
+        const pullScale = Math.min(len, 18);
+        const offset = ballRadiusPx + 24 + pullScale * 4; // 더 멀리 당길수록 큐를 더 뒤로 이동
+        const centerX = aimLine.start.x - nx * (offset + cueLength / 2);
+        const centerY = aimLine.start.y - ny * (offset + cueLength / 2);
+        const angleDeg = (Math.atan2(ny, nx) * 180) / Math.PI;
+        return { x: centerX, y: centerY, angle: angleDeg, length: cueLength };
+      })()
+    : null;
 
   return (
-    <>
-      {balls.map((ball) => {
-        const radius = computeRadius(ball);
-        return (
-          <BallComponent
-            key={ball.id}
-            ball={ball}
-            radius={radius}
-            isNew={newBallIds.has(ball.id)}
-            registerController={registerController}
+    <div className="w-full h-full flex items-center justify-center p-6">
+      <div
+        ref={boardRef}
+        className="relative w-full max-w-6xl aspect-[5/3] bg-gradient-to-b from-emerald-900 via-emerald-800 to-emerald-900 rounded-3xl border-4 border-amber-900 shadow-2xl overflow-hidden"
+      >
+        <div className="absolute inset-4 border-2 border-amber-800 rounded-2xl pointer-events-none" />
+        {pockets.map((pocket, idx) => {
+          const pos = worldToScreen(pocket);
+          const unit = Math.min(
+            boardSize.width / (table.width || 1),
+            boardSize.height / (table.depth || 1)
+          );
+          const radiusPx = pocketRadius * 2 * unit;
+          return (
+            <div
+              key={idx}
+              className="absolute bg-black/80 shadow-inner rounded-full"
+              style={{
+                width: radiusPx,
+                height: radiusPx,
+                transform: `translate(${pos.x - radiusPx / 2}px, ${pos.y - radiusPx / 2}px)`,
+              }}
+            />
+          );
+        })}
+
+        {aimLine && (
+          <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%">
+            <defs>
+              <linearGradient id="aim" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#fbbf24" />
+                <stop offset="100%" stopColor="#f59e0b" />
+              </linearGradient>
+            </defs>
+            <line
+              x1={aimLine.start.x}
+              y1={aimLine.start.y}
+              x2={aimLine.end.x}
+              y2={aimLine.end.y}
+              stroke="url(#aim)"
+              strokeWidth={4}
+              strokeLinecap="round"
+              strokeDasharray="8 8"
+            />
+          </svg>
+        )}
+
+        {cueVisual && (
+          <div
+            className="absolute origin-center pointer-events-none"
+            style={{
+              width: cueVisual.length,
+              height: 14,
+              left: cueVisual.x - cueVisual.length / 2,
+              top: cueVisual.y - 7,
+              transform: `rotate(${cueVisual.angle}deg)`,
+            }}
+          >
+            <div className="w-full h-full rounded-full shadow-lg overflow-hidden">
+              <div className="w-full h-full bg-gradient-to-r from-amber-800 via-amber-500 to-amber-200" />
+            </div>
+            <div className="absolute right-0 top-0 h-full w-4 bg-cyan-200 rounded-r-full shadow-inner" />
+            {pullInfo && (
+              <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[11px] font-semibold text-amber-200 bg-black/60 px-2 py-1 rounded-lg border border-white/10">
+                Power {pullInfo.pct}%
+              </div>
+            )}
+          </div>
+        )}
+
+        {renderBalls.map((renderBall) => (
+          <Ball
+            key={renderBall.ball.id}
+            ball={renderBall.ball}
+            position={renderBall.position}
+            radius={renderBall.radius}
+            table={table}
+            boardSize={boardSize}
+            isNew={renderBall.isNew}
             toolMode={toolMode}
+            onAimStart={handleAimStart}
             onReadBall={handleReadBall}
+            isAiming={aimedBallId === renderBall.ball.id}
           />
-        );
-      })}
-      {toolMode === 'cue' && <CueStick onBallHit={handleBallHit} />}
-    </>
+        ))}
+
+        {renderBalls.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center text-slate-200/80 space-y-2 bg-black/40 rounded-2xl px-6 py-4 border border-white/10 backdrop-blur">
+              <div className="text-sm font-semibold">아직 공이 없습니다</div>
+              <div className="text-xs text-slate-300">
+                + 버튼으로 첫 글을 만들어 큐로 굴려보세요. 포켓에 빠지면 댓글로 복사됩니다.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

@@ -1,140 +1,99 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
-import { Mesh, Vector3 } from 'three';
-import { useFrame } from '@react-three/fiber';
-import { animate } from 'animejs';
+import { useMemo } from 'react';
 import { Ball as BallType } from '@/types';
+
+interface TableSize {
+  width: number;
+  depth: number;
+  height: number;
+}
 
 interface BallProps {
   ball: BallType;
+  position: { x: number; y: number };
   radius: number;
-  isNew?: boolean;
-  registerController: (
-    id: string,
-    body: {
-      applyImpulse: (force: Vector3) => void;
-      position: Vector3;
-      velocity: Vector3;
-      radius: number;
-      meshRef: React.RefObject<Mesh>;
-      ball: BallType;
-    }
-  ) => () => void;
+  table: TableSize;
+  boardSize: { width: number; height: number };
+  isNew: boolean;
   toolMode: 'cue' | 'hand';
+  onAimStart: (ball: BallType, clientX: number, clientY: number) => void;
   onReadBall: (ball: BallType) => void;
+  isAiming?: boolean;
 }
 
 export function Ball({
   ball,
+  position,
   radius,
-  isNew = false,
-  registerController,
+  table,
+  boardSize,
+  isNew,
   toolMode,
+  onAimStart,
   onReadBall,
+  isAiming = false,
 }: BallProps) {
-  const meshRef = useRef<Mesh>(null);
-  const velocityRef = useRef(new Vector3(0, 0, 0));
-  const positionRef = useRef(
-    new Vector3(ball.position.x, ball.position.y, ball.position.z)
-  );
-  const [hovered, setHovered] = useState(false);
+  const pixelsPerUnit = useMemo(() => {
+    if (!boardSize.width || !boardSize.height) return 0;
+    return Math.min(boardSize.width / table.width, boardSize.height / table.depth);
+  }, [boardSize.height, boardSize.width, table.depth, table.width]);
 
-  useEffect(() => {
-    positionRef.current.set(ball.position.x, ball.position.y, ball.position.z);
-    velocityRef.current.set(0, 0, 0);
-
-    if (meshRef.current) {
-      meshRef.current.position.copy(positionRef.current);
-      meshRef.current.name = ball.type === 'article' ? 'ball' : '';
-      meshRef.current.userData.ballId = ball.id;
-      meshRef.current.scale.setScalar(radius / ball.radius);
-      meshRef.current.visible = ball.type === 'article';
+  const screen = useMemo(() => {
+    if (boardSize.width === 0 || boardSize.height === 0) {
+      return { x: 0, y: 0 };
     }
-  }, [ball.id, ball.position.x, ball.position.y, ball.position.z, radius, ball.radius, ball.type]);
-
-  // 공 색상 (depth에 따라 변경)
-  const getColor = () => {
-    if (ball.type === 'article') return '#3b82f6'; // blue
-
-    const depth = ball.depth ?? 0;
-    const colors = ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-    return colors[depth % colors.length];
-  };
-
-  // 생성 애니메이션 (anime.js)
-  useEffect(() => {
-    if (isNew && meshRef.current) {
-      // 초기 스케일 0
-      meshRef.current.scale.setScalar(0);
-
-      // 탄성 애니메이션으로 스케일 증가
-      animate(meshRef.current.scale, {
-        x: 1,
-        y: 1,
-        z: 1,
-        duration: 800,
-        ease: 'out(3)',
-      });
-
-      // 회전 애니메이션 추가
-      animate(meshRef.current.rotation, {
-        y: Math.PI * 2,
-        duration: 1000,
-        ease: 'outQuad',
-      });
-    }
-  }, [isNew]);
-
-  useFrame(() => {
-    if (!meshRef.current) return;
-
-    // 호버 효과
-    if (!isNew) {
-      const targetScale = hovered ? 1.2 : 1.0;
-      meshRef.current.scale.lerp(
-        { x: targetScale, y: targetScale, z: targetScale } as any,
-        0.1
-      );
-    }
-  });
-
-  useEffect(() => {
-    const applyImpulse = (force: Vector3) => {
-      velocityRef.current.add(force.clone());
+    return {
+      x: ((position.x + table.width / 2) / table.width) * boardSize.width,
+      y: ((position.y + table.depth / 2) / table.depth) * boardSize.height,
     };
+  }, [boardSize.height, boardSize.width, position.x, position.y, table.depth, table.width]);
 
-    const unregister = registerController(ball.id, {
-      applyImpulse,
-      position: positionRef.current,
-      velocity: velocityRef.current,
-      radius,
-      meshRef,
-      ball,
-    });
-    return () => unregister();
-  }, [ball, registerController, radius]);
+  const size = Math.max(radius * 2 * pixelsPerUnit, 10);
+
+  const color = useMemo(() => {
+    if (ball.type === 'article') return '#38bdf8';
+    const depth = ball.depth ?? 0;
+    const colors = ['#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6'];
+    return colors[depth % colors.length];
+  }, [ball.depth, ball.type]);
+
+  const shadow = ball.type === 'article' ? '0 0 0 2px rgba(56,189,248,0.25)' : '0 0 0 2px rgba(148,163,184,0.2)';
+  const label = `글 · ${ball.content.slice(0, 18)}${ball.content.length > 18 ? '…' : ''}`;
+  const scale = isAiming ? 1.08 : 1;
 
   return (
-    <mesh
-      ref={meshRef}
-      position={[ball.position.x, ball.position.y, ball.position.z]}
-      onPointerOver={() => ball.type === 'article' && setHovered(true)}
-      onPointerOut={() => setHovered(false)}
-      onClick={() => {
-        if (toolMode === 'hand' && ball.type === 'article') {
+    <div
+      className="absolute rounded-full flex items-center justify-center select-none cursor-pointer transition-transform duration-150"
+      style={{
+        width: size,
+        height: size,
+        transform: `translate(${screen.x - size / 2}px, ${screen.y - size / 2}px) scale(${scale})`,
+        background: color,
+        boxShadow: `${shadow}, 0 10px 25px rgba(0,0,0,0.35)`,
+        border: '2px solid rgba(255,255,255,0.18)',
+      }}
+      title={ball.content}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onAimStart(ball, e.clientX, e.clientY);
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (toolMode === 'hand') {
           onReadBall(ball);
         }
       }}
     >
-      <sphereGeometry args={[ball.radius, 32, 32]} />
-      <meshStandardMaterial
-        color={getColor()}
-        emissive={hovered ? getColor() : '#000000'}
-        emissiveIntensity={hovered ? 0.5 : 0}
-        metalness={0.3}
-        roughness={0.4}
-      />
-    </mesh>
+      <span className="text-[11px] font-semibold text-slate-950 drop-shadow-sm px-3 text-center leading-tight">
+        {label}
+      </span>
+      {isNew && (
+        <span
+          className="absolute inset-0 rounded-full animate-ping opacity-60 pointer-events-none"
+          style={{ backgroundColor: color }}
+        />
+      )}
+    </div>
   );
 }

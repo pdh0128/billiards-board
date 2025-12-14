@@ -65,12 +65,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
+    let userId = session?.user?.id;
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+    if (!userId) {
+      // 세션이 없으면 익명 사용자 자동 발급
+      const user = await prisma.user.create({ data: {} });
+      userId = user.id;
     }
 
     const body = await request.json();
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
     const article = await prisma.article.create({
       data: {
         content: content.trim(),
-        userId: session.user.id,
+        userId,
         positionX: position.x,
         positionY: position.y,
         positionZ: position.z,
@@ -161,6 +161,11 @@ export async function POST(request: NextRequest) {
           select: {
             id: true,
             uuid: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: true,
           },
         },
       },

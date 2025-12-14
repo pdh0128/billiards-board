@@ -1,14 +1,11 @@
 'use client';
 
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { useState } from 'react';
 import { BallManager } from './BallManager';
-import { useEffect, useState } from 'react';
 import { ToolSelector } from '../game/tool-selector';
 import { Ball } from '@/types';
 
 export function Scene() {
-  // 당구대 크기 (4배 확대)
   const TABLE_WIDTH = 80;
   const TABLE_DEPTH = 48;
   const TABLE_HEIGHT = 1;
@@ -19,19 +16,50 @@ export function Scene() {
     focusId: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (toolMode !== 'hand') {
+  const handleToolChange = (mode: 'cue' | 'hand') => {
+    setToolMode(mode);
+    if (mode !== 'hand') {
       setSelectedThread(null);
     }
-  }, [toolMode]);
+  };
 
   return (
-    <div className="w-full h-screen absolute inset-0">
-      <ToolSelector mode={toolMode} onChange={setToolMode} />
+    <div className="w-full h-screen absolute inset-0 bg-gradient-to-br from-slate-950 via-emerald-950/60 to-slate-900">
+      <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.12),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(59,130,246,0.12),transparent_32%),radial-gradient(circle_at_50%_90%,rgba(251,191,36,0.12),transparent_30%)]" />
+
+      <div className="absolute top-4 left-4 z-50 space-y-2 pointer-events-none">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-cyan-400 to-emerald-400 text-slate-950 font-black grid place-items-center shadow-lg">
+            🎱
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-white">Billiards Board</div>
+            <div className="text-sm text-slate-300">글은 파란 공, 최상위 댓글은 초록 공으로 떠다니는 소셜 보드</div>
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-xs text-slate-100 pointer-events-auto">
+          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-black font-semibold">큐</span>
+          드래그로 힘 조절 → 포켓에 빠지면 댓글로 복사됩니다
+          <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-black font-semibold">손</span>
+          공 클릭으로 글·댓글 내용 읽기
+        </div>
+      </div>
+
+      <div className="absolute bottom-4 left-4 z-50 text-xs text-slate-200 space-y-1 pointer-events-none">
+        <div className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-full bg-cyan-400" />
+          <span>새 글</span>
+          <span className="h-3 w-3 rounded-full bg-emerald-400 ml-3" />
+          <span>최상위 댓글 (대댓글 수에 따라 커집니다)</span>
+        </div>
+        <div className="text-slate-400">게시판은 2D 평면으로 단순화되어 누구나 바로 플레이 가능</div>
+      </div>
+
+      <ToolSelector mode={toolMode} onChange={handleToolChange} />
 
       {selectedThread && toolMode === 'hand' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-2xl w-[92%]">
-          <div className="bg-gray-950/90 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-md p-5">
+          <div className="bg-slate-950/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-md p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="text-xs uppercase tracking-wider text-gray-400">
                 글 + 댓글 미리보기
@@ -77,86 +105,11 @@ export function Scene() {
         </div>
       )}
 
-      <Canvas>
-        <PerspectiveCamera makeDefault position={[0, 30, 60]} />
-        <OrbitControls
-          enableDamping
-          dampingFactor={0.05}
-          minDistance={20}
-          maxDistance={100}
-          maxPolarAngle={Math.PI / 2.2}
-        />
-
-        {/* 조명 */}
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[40, 60, 20]} intensity={1.2} castShadow />
-        <pointLight position={[0, 40, 0]} intensity={0.8} />
-        <pointLight position={[-40, 20, -40]} intensity={0.3} color="#4a90e2" />
-
-        {/* 당구대 테이블 */}
-        <mesh position={[0, -TABLE_HEIGHT / 2, 0]} receiveShadow>
-          <boxGeometry args={[TABLE_WIDTH, TABLE_HEIGHT, TABLE_DEPTH]} />
-          <meshStandardMaterial color="#0d5c1f" roughness={0.4} metalness={0.1} />
-        </mesh>
-
-        {/* 당구대 테두리 - 긴 쪽 */}
-        <mesh position={[0, 1.2, -TABLE_DEPTH / 2 - 0.5]}>
-          <boxGeometry args={[TABLE_WIDTH + 2, 2.4, 2]} />
-          <meshStandardMaterial color="#3d2817" roughness={0.6} metalness={0.3} />
-        </mesh>
-        <mesh position={[0, 1.2, TABLE_DEPTH / 2 + 0.5]}>
-          <boxGeometry args={[TABLE_WIDTH + 2, 2.4, 2]} />
-          <meshStandardMaterial color="#3d2817" roughness={0.6} metalness={0.3} />
-        </mesh>
-
-        {/* 당구대 테두리 - 짧은 쪽 */}
-        <mesh position={[-TABLE_WIDTH / 2 - 0.5, 1.2, 0]}>
-          <boxGeometry args={[2, 2.4, TABLE_DEPTH]} />
-          <meshStandardMaterial color="#3d2817" roughness={0.6} metalness={0.3} />
-        </mesh>
-        <mesh position={[TABLE_WIDTH / 2 + 0.5, 1.2, 0]}>
-          <boxGeometry args={[2, 2.4, TABLE_DEPTH]} />
-          <meshStandardMaterial color="#3d2817" roughness={0.6} metalness={0.3} />
-        </mesh>
-
-        {/* 당구대 포켓 (6개) */}
-        {/* 상단 좌우 */}
-        <mesh position={[-TABLE_WIDTH / 2 + 2, 0, -TABLE_DEPTH / 2 + 2]}>
-          <sphereGeometry args={[1.5, 16, 16]} />
-          <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-        </mesh>
-        <mesh position={[TABLE_WIDTH / 2 - 2, 0, -TABLE_DEPTH / 2 + 2]}>
-          <sphereGeometry args={[1.5, 16, 16]} />
-          <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-        </mesh>
-
-        {/* 중앙 좌우 */}
-        <mesh position={[-TABLE_WIDTH / 2 + 2, 0, 0]}>
-          <sphereGeometry args={[1.5, 16, 16]} />
-          <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-        </mesh>
-        <mesh position={[TABLE_WIDTH / 2 - 2, 0, 0]}>
-          <sphereGeometry args={[1.5, 16, 16]} />
-          <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-        </mesh>
-
-        {/* 하단 좌우 */}
-        <mesh position={[-TABLE_WIDTH / 2 + 2, 0, TABLE_DEPTH / 2 - 2]}>
-          <sphereGeometry args={[1.5, 16, 16]} />
-          <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-        </mesh>
-        <mesh position={[TABLE_WIDTH / 2 - 2, 0, TABLE_DEPTH / 2 - 2]}>
-          <sphereGeometry args={[1.5, 16, 16]} />
-          <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-        </mesh>
-
-        {/* 공 관리자 */}
-        <BallManager
-          table={{ width: TABLE_WIDTH, depth: TABLE_DEPTH, height: TABLE_HEIGHT }}
-          toolMode={toolMode}
-          onReadThread={(data) => setSelectedThread(data)}
-        />
-      </Canvas>
+      <BallManager
+        table={{ width: TABLE_WIDTH, depth: TABLE_DEPTH, height: TABLE_HEIGHT }}
+        toolMode={toolMode}
+        onReadThread={(data) => setSelectedThread(data)}
+      />
     </div>
   );
 }

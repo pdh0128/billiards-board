@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import prisma from '@/lib/prisma';
 import { generatePath, getDepthFromPath } from '@/utils/path';
 import { getUserFromRequest } from '@/lib/auth-jwt';
 

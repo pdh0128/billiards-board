@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, pbkdf2Sync } from 'crypto';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 import { signJwt } from '@/lib/jwt';
 
 const EXPIRES_IN = 24 * 60 * 60; // 24h
@@ -15,15 +15,23 @@ export async function POST(request: NextRequest) {
   try {
     const { username, password } = await request.json();
 
-    if (!username || typeof username !== 'string' || username.length < 2) {
+    if (!username || !password) {
       return NextResponse.json(
-        { success: false, error: 'Username must be at least 2 characters' },
+        { success: false, error: 'Username and password are required' },
         { status: 400 }
       );
     }
-    if (!password || typeof password !== 'string' || password.length < 4) {
+
+    if (String(username).length < 2 || String(username).length > 32) {
       return NextResponse.json(
-        { success: false, error: 'Password must be at least 4 characters' },
+        { success: false, error: 'Username must be 2-32 characters' },
+        { status: 400 }
+      );
+    }
+
+    if (String(password).length < 4 || String(password).length > 64) {
+      return NextResponse.json(
+        { success: false, error: 'Password must be 4-64 characters' },
         { status: 400 }
       );
     }
@@ -54,9 +62,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('POST /api/auth/signup error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to sign up' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to signup' }, { status: 500 });
   }
 }

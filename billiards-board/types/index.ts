@@ -1,4 +1,4 @@
-import { Comment, Post, User, VoteValue } from '@prisma/client';
+import { Comment, Post, User } from '@prisma/client';
 
 export interface VoteSummary {
   up: number;
@@ -45,4 +45,4 @@ export interface PathNode {
   comment: Comment;
 }
 
-export type VoteValueString = VoteValue | 'UP' | 'DOWN';
+export type VoteValueString = 'UP' | 'DOWN';

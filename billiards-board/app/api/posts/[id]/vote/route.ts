@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import prisma from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-jwt';
 
 function summarizeVotes(grouped: Array<{ value: 'UP' | 'DOWN'; _count: { value: number } }>) {

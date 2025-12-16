@@ -68,14 +68,9 @@ model Comment {
   @@index([createdAt])
 }
 
-enum VoteValue {
-  UP
-  DOWN
-}
-
 model Vote {
   id        String    @id @default(cuid())
-  value     VoteValue
+  value     String
   postId    String
   userId    String
   createdAt DateTime  @default(now())

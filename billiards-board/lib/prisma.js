@@ -11,3 +11,4 @@ globalForPrisma.prisma =
   });
 
 module.exports = { prisma: globalForPrisma.prisma };
+module.exports.default = globalForPrisma.prisma;

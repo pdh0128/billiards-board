@@ -85,12 +85,21 @@ useEffect(() => {
             <p className="text-sm text-slate-400 mt-1">커서 기반 무한 스크롤 + Path Model 댓글</p>
           </div>
           <Link
+            href="/auth"
+            className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold shadow"
+          >
+            로그인/회원가입
+          </Link>
+        </header>
+
+        <div className="flex justify-end mb-6">
+          <Link
             href="/posts/new"
             className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow"
           >
             글쓰기
           </Link>
-        </header>
+        </div>
 
         <div className="space-y-4">
           {state.posts.map((post) => (

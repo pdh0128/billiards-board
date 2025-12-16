@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, Html, OrbitControls } from '@react-three/drei';
+import { Float, Html, OrbitControls, Stars } from '@react-three/drei';
 import { Mesh, Vector3 } from 'three';
 import { useRouter } from 'next/navigation';
 import { PostWithMeta } from '@/types';
@@ -45,17 +45,17 @@ function PostCard3D({ post, position, color, onSelect }: CardProps) {
           onClick={handleSelect}
         >
           <boxGeometry args={[1.6, 1, 0.12]} />
-          <meshStandardMaterial color={color} metalness={0.18} roughness={0.35} />
+          <meshStandardMaterial color={color} metalness={0.4} roughness={0.25} emissive={color} emissiveIntensity={0.12} />
         </mesh>
         <Html center className="select-none">
           <button
             type="button"
             onClick={handleSelect}
-            className="w-40 text-center text-xs text-slate-100 cursor-pointer bg-slate-900/50 border border-slate-800/80 rounded-lg px-2 py-1.5 shadow hover:border-emerald-500/60 transition-colors"
+            className="w-40 text-center text-xs text-slate-100 cursor-pointer bg-slate-900/70 border border-slate-700/70 rounded-lg px-2 py-1.5 shadow hover:border-emerald-400/80 transition-colors backdrop-blur"
           >
             <p className="font-semibold line-clamp-1">{post.title}</p>
-            <p className="text-slate-400 line-clamp-2 mt-1">{post.content}</p>
-            <p className="text-[10px] text-emerald-300 mt-1">
+            <p className="text-slate-300 line-clamp-2 mt-1">{post.content}</p>
+            <p className="text-[10px] text-emerald-200 mt-1">
               ▲ {post.votes?.up ?? 0} / ▼ {post.votes?.down ?? 0}
             </p>
           </button>
@@ -69,7 +69,7 @@ type GalleryProps = {
   posts: PostWithMeta[];
 };
 
-const PALETTE = ['#0f172a', '#0b2242', '#0f2f4f', '#103262', '#0f3a5f', '#0c4b5c', '#0f553f', '#0f3a2e'];
+const BRIGHT_PALETTE = ['#60a5fa', '#38bdf8', '#22d3ee', '#a855f7', '#22c55e', '#f59e0b', '#f97316', '#f43f5e'];
 
 export default function Post3DGallery({ posts }: GalleryProps) {
   const router = useRouter();
@@ -89,7 +89,7 @@ export default function Post3DGallery({ posts }: GalleryProps) {
         return {
           post,
           position: [Math.cos(angle) * radius, heightStep, Math.sin(angle) * radius] as [number, number, number],
-          color: PALETTE[idx % PALETTE.length],
+          color: BRIGHT_PALETTE[idx % BRIGHT_PALETTE.length],
         };
       }),
     [visiblePosts]
@@ -104,23 +104,25 @@ export default function Post3DGallery({ posts }: GalleryProps) {
   }
 
   return (
-    <div className="h-[420px] rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 shadow-inner overflow-hidden">
+    <div className="h-[420px] rounded-2xl border border-slate-800 bg-gradient-to-br from-[#050816] via-[#0b1630] to-black shadow-inner overflow-hidden">
       <Canvas
         shadows
         dpr={[1, 1.5]}
         camera={{ position: [0, 4, 10], fov: 38, near: 0.1, far: 50 }}
         gl={{ antialias: true }}
       >
-        <color attach="background" args={['#020617']} />
-        <ambientLight intensity={0.4} />
+        <color attach="background" args={['#050816']} />
+        <Stars radius={60} depth={30} count={2000} factor={4} saturation={0.5} fade speed={1} />
+        <ambientLight intensity={0.45} />
         <directionalLight
           castShadow
           position={[4, 8, 6]}
-          intensity={1.2}
+          intensity={1.35}
           shadow-mapSize={[1024, 1024]}
           shadow-bias={-0.0003}
         />
-        <pointLight position={[-6, 4, -6]} intensity={0.35} color="#38bdf8" />
+        <pointLight position={[-6, 4, -6]} intensity={0.4} color="#38bdf8" />
+        <pointLight position={[6, -2, -2]} intensity={0.3} color="#f472b6" />
         <group position={[0, -1.4, 0]}>
           <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[30, 30]} />

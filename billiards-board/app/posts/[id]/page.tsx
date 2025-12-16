@@ -7,6 +7,7 @@ import { Comment } from '@prisma/client';
 import { CommentWithUser, PostWithMeta, VoteSummary } from '@/types';
 import { getAuthToken } from '@/utils/client-auth';
 import { animate, stagger } from 'animejs';
+import PostDetail3DScene from '@/components/post-detail-3d-scene';
 
 type DetailState = {
   post: PostWithMeta | null;
@@ -169,12 +170,16 @@ export default function PostDetail() {
   }, [state.comments]);
 
   if (state.loading) {
-    return <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">불러오는 중...</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#030712] via-[#0b1630] to-black text-white flex items-center justify-center">
+        불러오는 중...
+      </div>
+    );
   }
 
   if (state.error || !state.post) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-gradient-to-br from-[#030712] via-[#0b1630] to-black text-white flex flex-col items-center justify-center gap-4">
         <p className="text-lg">문제가 발생했습니다: {state.error ?? '글을 찾을 수 없습니다'}</p>
         <Link href="/" className="text-emerald-400 underline">
           목록으로 돌아가기
@@ -186,98 +191,76 @@ export default function PostDetail() {
   const { post } = state;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
-        <Link href="/" className="text-emerald-400 underline">
-          ← 목록으로
-        </Link>
+    <main className="min-h-screen bg-gradient-to-br from-[#030712] via-[#0b1630] to-black text-white">
+      <div className="max-w-4xl mx-auto px-4 py-10 space-y-8 relative">
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_20%,rgba(34,197,94,0.08),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(59,130,246,0.08),transparent_30%),radial-gradient(circle_at_60%_80%,rgba(236,72,153,0.06),transparent_30%)] blur-3xl" />
+        <div className="relative flex items-center justify-between">
+          <Link href="/" className="text-emerald-400 underline">
+            ← 목록으로
+          </Link>
+          <p className="text-xs text-slate-400">우주 카드 뷰 · 댓글 체인</p>
+        </div>
 
-        <article className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-lg detail-card">
-          <h1 className="text-3xl font-bold">{post.title}</h1>
-          <div className="text-sm text-slate-400 mt-2 flex gap-3">
-            <span>작성자: {post.user?.username ?? '익명'}</span>
-            <span>{new Date(post.createdAt).toLocaleString()}</span>
-          </div>
-          <p className="text-slate-200 mt-6 whitespace-pre-wrap leading-relaxed">{post.content}</p>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => handleVote('UP')}
-              disabled={voting}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-semibold disabled:opacity-50"
-            >
-              개추 {post.votes?.up ?? 0}
-            </button>
-            <button
-              onClick={() => handleVote('DOWN')}
-              disabled={voting}
-              className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 font-semibold disabled:opacity-50"
-            >
-              비추 {post.votes?.down ?? 0}
-            </button>
-          </div>
-        </article>
-
-        <section>
-          <h2 className="text-xl font-semibold mb-4">댓글</h2>
-          <form onSubmit={handleCommentSubmit} className="space-y-3 mb-6">
-            {parentPath && (
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>대댓글 작성 중 (parent path: {parentPath})</span>
-                <button type="button" className="text-emerald-400 underline" onClick={() => setParentPath(undefined)}>
-                  취소
+        <section className="relative bg-slate-900/80 border border-emerald-900/40 rounded-3xl p-6 shadow-[0_30px_120px_-60px_rgba(34,197,94,0.5)] overflow-hidden detail-card space-y-4">
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-emerald-500/5 via-transparent to-sky-500/5" />
+          <div className="relative flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-sm font-semibold">
+                  {post.user?.username?.slice(0, 2)?.toUpperCase() ?? '익'}
+                </div>
+                <div>
+                  <p className="text-sm text-emerald-200">작성자 · {post.user?.username ?? '익명'}</p>
+                  <p className="text-xs text-slate-400">{new Date(post.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleVote('UP')}
+                  disabled={voting}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-semibold disabled:opacity-50 shadow"
+                >
+                  개추 {post.votes?.up ?? 0}
+                </button>
+                <button
+                  onClick={() => handleVote('DOWN')}
+                  disabled={voting}
+                  className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 font-semibold disabled:opacity-50 shadow"
+                >
+                  비추 {post.votes?.down ?? 0}
                 </button>
               </div>
-            )}
-            <textarea
-              value={commentContent}
-              onChange={(e) => setCommentContent(e.target.value)}
-              placeholder="댓글을 입력하세요"
-              className="w-full min-h-[120px] rounded-xl bg-slate-900 border border-slate-800 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg font-semibold"
-              disabled={!commentContent.trim()}
-            >
-              등록
-            </button>
-          </form>
+            </div>
 
-          <div className="space-y-3">
-            {tree.length === 0 && <p className="text-slate-500 text-sm">첫 댓글을 남겨보세요.</p>}
-            {tree.map((comment) => (
-              <div
-                key={comment.id}
-                className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 comment-item"
-                style={{ marginLeft: Math.min(comment.depth * 16, 120) }}
+            <form onSubmit={handleCommentSubmit} className="relative space-y-3">
+              {parentPath && (
+                <div className="flex items-center justify-between text-xs text-emerald-200">
+                  <span>대댓글 작성 중 (parent path: {parentPath})</span>
+                  <button type="button" className="underline" onClick={() => setParentPath(undefined)}>
+                    취소
+                  </button>
+                </div>
+              )}
+              <textarea
+                value={commentContent}
+                onChange={(e) => setCommentContent(e.target.value)}
+                placeholder="댓글을 입력하세요"
+                className="w-full min-h-[120px] rounded-2xl bg-slate-900/70 border border-slate-800 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg font-semibold shadow"
+                disabled={!commentContent.trim()}
               >
-                <div className="text-xs text-slate-400 flex justify-between">
-                  <span>{comment.user?.username ?? '익명'}</span>
-                  {!comment.isDeleted && (
-                    <div className="flex gap-2">
-                      <button
-                        className="text-emerald-400"
-                        type="button"
-                        onClick={() => setParentPath(comment.path)}
-                      >
-                        대댓글
-                      </button>
-                      <button
-                        className="text-rose-400"
-                        type="button"
-                        onClick={() => handleDeleteComment(comment.id)}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-2 whitespace-pre-wrap text-sm text-slate-100">
-                  {comment.isDeleted ? '삭제된 댓글입니다.' : comment.content}
-                </div>
-              </div>
-            ))}
+                등록
+              </button>
+            </form>
+
+            <PostDetail3DScene post={post} comments={tree} onReply={setParentPath} onDelete={handleDeleteComment} />
+
+            <div className="relative bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
+              <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{post.content}</p>
+            </div>
           </div>
         </section>
       </div>

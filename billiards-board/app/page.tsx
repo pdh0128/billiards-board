@@ -5,6 +5,7 @@ import { animate, stagger } from 'animejs';
 import Link from 'next/link';
 import { PostWithMeta } from '@/types';
 import Post3DGallery from '@/components/post-3d-gallery';
+import { getUserIdFromToken } from '@/utils/client-auth';
 
 type FetchState = {
   posts: PostWithMeta[];
@@ -22,12 +23,17 @@ export default function Home() {
     loading: false,
     error: null,
   });
+  const [userId, setUserId] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef(state);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    setUserId(getUserIdFromToken());
+  }, []);
 
   const loadMore = useCallback(async () => {
     const snapshot = stateRef.current;
@@ -119,12 +125,18 @@ export default function Home() {
             <h1 className="text-3xl font-bold">투표 게시판</h1>
             <p className="text-sm text-slate-400 mt-1">커서 기반 무한 스크롤 + Path Model 댓글</p>
           </div>
-          <Link
-            href="/auth"
-            className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold shadow"
-          >
-            로그인/회원가입
-          </Link>
+          {userId ? (
+            <button className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow">
+              로그아웃
+            </button>
+          ) : (
+            <Link
+              href="/auth"
+              className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-semibold shadow"
+            >
+              로그인/회원가입
+            </Link>
+          )}
         </header>
 
         <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-lg">

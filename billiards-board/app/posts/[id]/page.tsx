@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Comment } from '@prisma/client';
@@ -28,6 +28,8 @@ export default function PostDetail() {
   const [commentContent, setCommentContent] = useState('');
   const [parentPath, setParentPath] = useState<string | undefined>(undefined);
   const [voting, setVoting] = useState(false);
+  const [showCommentForm, setShowCommentForm] = useState(false);
+  const formRef = useRef<HTMLDivElement | null>(null);
 
   const fetchDetail = useCallback(async () => {
     if (!postId) {
@@ -189,6 +191,11 @@ export default function PostDetail() {
   }
 
   const { post } = state;
+  const focusComment = (path?: string) => {
+    setParentPath(path);
+    setShowCommentForm(true);
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#030712] via-[#0b1630] to-black text-white">
@@ -204,59 +211,80 @@ export default function PostDetail() {
         <section className="relative bg-slate-900/80 border border-emerald-900/40 rounded-3xl p-6 shadow-[0_30px_120px_-60px_rgba(34,197,94,0.5)] overflow-hidden detail-card space-y-4">
           <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-emerald-500/5 via-transparent to-sky-500/5" />
           <div className="relative flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-sm font-semibold">
-                  {post.user?.username?.slice(0, 2)?.toUpperCase() ?? '익'}
-                </div>
-                <div>
-                  <p className="text-sm text-emerald-200">작성자 · {post.user?.username ?? '익명'}</p>
-                  <p className="text-xs text-slate-400">{new Date(post.createdAt).toLocaleString()}</p>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-sm font-semibold">
+                {post.user?.username?.slice(0, 2)?.toUpperCase() ?? '익'}
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleVote('UP')}
-                  disabled={voting}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-semibold disabled:opacity-50 shadow"
-                >
-                  개추 {post.votes?.up ?? 0}
-                </button>
-                <button
-                  onClick={() => handleVote('DOWN')}
-                  disabled={voting}
-                  className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 font-semibold disabled:opacity-50 shadow"
-                >
-                  비추 {post.votes?.down ?? 0}
-                </button>
+              <div>
+                <p className="text-sm text-emerald-200">작성자 · {post.user?.username ?? '익명'}</p>
+                <p className="text-xs text-slate-400">{new Date(post.createdAt).toLocaleString()}</p>
               </div>
             </div>
 
-            <form onSubmit={handleCommentSubmit} className="relative space-y-3">
-              {parentPath && (
-                <div className="flex items-center justify-between text-xs text-emerald-200">
-                  <span>대댓글 작성 중 (parent path: {parentPath})</span>
-                  <button type="button" className="underline" onClick={() => setParentPath(undefined)}>
-                    취소
-                  </button>
-                </div>
+            <div className="relative space-y-3">
+              {!showCommentForm && (
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-semibold shadow"
+                  onClick={() => focusComment(undefined)}
+                >
+                  댓글 작성
+                </button>
               )}
-              <textarea
-                value={commentContent}
-                onChange={(e) => setCommentContent(e.target.value)}
-                placeholder="댓글을 입력하세요"
-                className="w-full min-h-[120px] rounded-2xl bg-slate-900/70 border border-slate-800 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg font-semibold shadow"
-                disabled={!commentContent.trim()}
-              >
-                등록
-              </button>
-            </form>
+              {showCommentForm && (
+                <form ref={formRef} onSubmit={handleCommentSubmit} className="space-y-3">
+                  {parentPath && (
+                    <div className="flex items-center justify-between text-xs text-emerald-200">
+                      <span>대댓글 작성 중 (parent path: {parentPath})</span>
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => {
+                          setParentPath(undefined);
+                          setShowCommentForm(false);
+                        }}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
+                  <textarea
+                    value={commentContent}
+                    onChange={(e) => setCommentContent(e.target.value)}
+                    placeholder="댓글을 입력하세요"
+                    className="w-full min-h-[120px] rounded-2xl bg-slate-900/70 border border-slate-800 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg font-semibold shadow"
+                      disabled={!commentContent.trim()}
+                    >
+                      등록
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg font-semibold shadow"
+                      onClick={() => {
+                        setShowCommentForm(false);
+                        setParentPath(undefined);
+                      }}
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
 
-            <PostDetail3DScene post={post} comments={tree} onReply={setParentPath} onDelete={handleDeleteComment} />
+            <PostDetail3DScene
+              post={post}
+              comments={tree}
+              onReply={(path) => focusComment(path)}
+              onDelete={handleDeleteComment}
+              onVote={(value) => handleVote(value)}
+              onRequestComment={() => focusComment(undefined)}
+            />
 
             <div className="relative bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
               <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{post.content}</p>

@@ -16,7 +16,7 @@ function summarizeVotes(grouped: Array<{ value: 'UP' | 'DOWN'; _count: { value: 
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const post = await prisma.post.findUnique({
+    const post = await prisma.post.findFirst({
       where: { id: params.id, isDeleted: false },
       include: {
         user: { select: { id: true, username: true, uuid: true } },
@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const title = (body?.title ?? '').trim();
     const content = (body?.content ?? '').trim();
 
-    const existing = await prisma.post.findUnique({ where: { id: params.id } });
+    const existing = await prisma.post.findFirst({ where: { id: params.id } });
     if (!existing || existing.isDeleted) {
       return NextResponse.json({ success: false, error: 'Post not found' }, { status: 404 });
     }

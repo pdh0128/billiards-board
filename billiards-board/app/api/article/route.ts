@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateNonCollidingPosition } from '@/utils/position';
-import { broadcastArticleCreated } from '@/lib/socket-server';
 import { getUserFromRequest } from '@/lib/auth-jwt';
 
 // GET - 모든 글 조회 (페이지네이션)
@@ -169,14 +168,6 @@ export async function POST(request: NextRequest) {
         },
       },
     });
-
-    // WebSocket으로 브로드캐스트
-    try {
-      broadcastArticleCreated(article);
-    } catch (error) {
-      console.error('WebSocket broadcast error:', error);
-      // WebSocket 에러는 무시하고 계속 진행
-    }
 
     return NextResponse.json({
       success: true,

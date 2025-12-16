@@ -1,6 +1,6 @@
 # 🎱 Billiards Board
 
-Three.js 기반 3D 인터랙티브 게시판 - 공으로 글을 쓰고, 충돌로 댓글을 남기고, 큐대로 삭제하세요.
+Three.js 기반 3D 인터랙티브 게시판 - 공으로 글을 쓰고, 충돌로 댓글을 남기고, 큐대로 삭제하세요. (실시간 WebSocket 동기화는 제거되어 폴링/새로고침 기반으로 동작합니다.)
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-16.0-black.svg)
@@ -11,7 +11,6 @@ Three.js 기반 3D 인터랙티브 게시판 - 공으로 글을 쓰고, 충돌�
 - **📝 글 = 공 생성**: 익명으로 글을 작성하면 3D 공간에 공이 생성됩니다
 - **💬 충돌 = 댓글**: 공끼리 충돌시켜 댓글을 작성합니다
 - **🎯 큐대 타격 = 삭제**: Raycaster로 공을 클릭하여 삭제합니다
-- **🔄 실시간 동기화**: WebSocket으로 모든 사용자가 같은 공간을 공유합니다
 - **🌳 무한 댓글 깊이**: Path Model 기반으로 depth 제한 없는 트리 구조를 지원합니다
 - **🗑️ 재귀 삭제**: 공을 삭제하면 자식 댓글도 함께 제거됩니다
 
@@ -46,7 +45,6 @@ npm install
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="your-secret-here"
-SOCKET_PORT=3001
 ```
 
 4. 데이터베이스 마이그레이션
@@ -81,7 +79,6 @@ npm run dev
 - **Prisma ORM** - 데이터베이스 ORM
 - **PostgreSQL** - 관계형 데이터베이스
 - **NextAuth.js v5** - 인증 (익명 UUID 기반)
-- **Socket.IO** - 실시간 WebSocket 통신
 
 ## 📁 프로젝트 구조
 
@@ -100,10 +97,7 @@ billiards-board/
 │   │   └── BallManager.tsx
 │   └── ui/              # UI 컴포넌트
 ├── lib/
-│   ├── prisma.ts        # Prisma 클라이언트
-│   └── socket-server.ts # Socket.IO 서버
-├── hooks/
-│   └── useSocket.ts     # Socket.IO 훅
+│   └── prisma.ts        # Prisma 클라이언트
 ├── utils/
 │   ├── path.ts          # Path Model 유틸
 │   └── delete.ts        # 재귀 삭제 로직
@@ -138,14 +132,6 @@ billiards-board/
 
 이를 통해 트리 구조를 안전하게 유지하면서 재귀적으로 삭제합니다.
 
-### WebSocket 이벤트
-
-- `syncState`: 초기 상태 동기화
-- `createArticle`: 새 글 생성
-- `createComment`: 새 댓글 생성
-- `deleteArticle`: 글 삭제
-- `deleteComment`: 댓글 삭제
-
 ## 🗺️ 로드맵
 
 - [x] Week 1: 프로젝트 초기 설정
@@ -179,7 +165,6 @@ MIT License
 - [React Three Fiber](https://docs.pmnd.rs/react-three-fiber/)
 - [Prisma](https://www.prisma.io/)
 - [NextAuth.js](https://authjs.dev/)
-- [Socket.IO](https://socket.io/)
 
 ---
 

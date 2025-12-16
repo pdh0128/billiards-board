@@ -61,13 +61,24 @@ export function ArticleForm({ onSuccess }: ArticleFormProps) {
         throw new Error(data.error || 'Failed to create article');
       }
 
-      // 성공 - 다음 턴으로 넘기기
+      // 성공 - 새 글 즉시 반영 및 턴 넘기기
+      if (data.data && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('articles:refresh', {
+            detail: { article: data.data },
+          })
+        );
+      }
       setContent('');
       setOpen(false);
       nextTurn();
       onSuccess?.();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create article');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to create article');
+      }
     } finally {
       setIsSubmitting(false);
     }

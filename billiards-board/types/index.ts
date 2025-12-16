@@ -36,15 +36,6 @@ export interface CommentWithUser extends Comment {
   user: User;
 }
 
-// WebSocket 이벤트 타입
-export type SocketEvent =
-  | { type: 'createArticle'; data: Article }
-  | { type: 'createComment'; data: Comment }
-  | { type: 'deleteArticle'; data: { id: string } }
-  | { type: 'deleteComment'; data: { id: string } }
-  | { type: 'updatePosition'; data: { id: string; position: Position3D } }
-  | { type: 'syncState'; data: { articles: Article[]; comments: Comment[] } };
-
 // API 응답 타입
 export interface ApiResponse<T> {
   success: boolean;

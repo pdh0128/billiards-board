@@ -3,11 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ball as BallType } from '@/types';
 import { useArticles } from '@/hooks/useArticles';
-import { useSocket } from '@/hooks/useSocket';
 import { Ball } from './Ball';
-import { authHeaders, getAuthToken, getUserIdFromToken } from '@/utils/client-auth';
-import { useGame } from '@/contexts/game-context';
-import { setSocketAuth } from '@/hooks/useSocket';
+import { authHeaders, getUserIdFromToken } from '@/utils/client-auth';
 
 interface TableSize {
   width: number;
@@ -22,6 +19,24 @@ interface Props {
   toolMode: ToolMode;
   onReadThread: (data: { article: BallType; comments: BallType[]; focusId: string }) => void;
 }
+
+type ArticleEventDetail = {
+  article?: {
+    id: string;
+    content: string;
+    positionX: number;
+    positionY?: number;
+    positionZ: number;
+    radius: number;
+    userId: string;
+    createdAt: string | Date;
+    isDeleted?: boolean;
+    articleId?: string;
+    path?: string;
+    depth?: number;
+    _count?: { comments?: number };
+  };
+};
 
 interface PhysicsBody {
   position: { x: number; y: number };
@@ -44,33 +59,8 @@ interface RenderBall {
   isNew: boolean;
 }
 
-interface ArticlePayload {
-  id: string;
-  content: string;
-  positionX: number;
-  positionY: number;
-  positionZ: number;
-  radius: number;
-  userId: string;
-  createdAt: string;
-}
-
-interface CommentPayload extends ArticlePayload {
-  articleId: string;
-  path: string;
-  depth: number;
-}
-
-interface PositionUpdate {
-  id: string;
-  type: 'article' | 'comment';
-  position: { x: number; y: number; z: number };
-}
-
 export function BallManager({ table, toolMode, onReadThread }: Props) {
-  const { balls, addBall, removeBall, updateBall, refresh } = useArticles();
-  const socket = useSocket();
-  const { myPlayer, syncPlayers } = useGame();
+  const { balls, addBall, removeBall, refresh } = useArticles();
   const myUserId = getUserIdFromToken();
   const boardRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
@@ -113,147 +103,53 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
   const pocketRadius = 1.8;
 
   useEffect(() => {
-    if (!socket) return;
+    const handleRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<ArticleEventDetail>).detail;
+      const payload = detail?.article;
 
-    socket.on('connect', () => {
-      console.log('[socket] connected', socket.id);
-      socket.emit('requestPlayers');
-    });
+      if (payload) {
+        const isComment = Boolean(payload.articleId);
+        const newBall: BallType = {
+          id: payload.id,
+          type: isComment ? 'comment' : 'article',
+          content: payload.content,
+          position: {
+            x: payload.positionX,
+            y: payload.positionY ?? 0,
+            z: payload.positionZ,
+          },
+          radius: payload.radius,
+          commentsCount: payload._count?.comments ?? 0,
+          userId: payload.userId,
+          createdAt: new Date(payload.createdAt),
+          isDeleted: payload.isDeleted ?? false,
+          articleId: payload.articleId,
+          path: payload.path,
+          depth: payload.depth,
+        };
 
-    socket.on('createArticle', (article: ArticlePayload) => {
-      const newBall: BallType = {
-        id: article.id,
-        type: 'article',
-        content: article.content,
-        position: {
-          x: article.positionX,
-          y: article.positionY,
-          z: article.positionZ,
-        },
-        radius: article.radius,
-        commentsCount: 0,
-        userId: article.userId,
-        createdAt: new Date(article.createdAt),
-        isDeleted: false,
-      };
-
-      addBall(newBall);
-      setNewBallIds((prev) => new Set(prev).add(article.id));
-      setTimeout(() => {
+        addBall(newBall);
         setNewBallIds((prev) => {
           const updated = new Set(prev);
-          updated.delete(article.id);
+          updated.add(payload.id);
           return updated;
         });
-      }, 3000);
-    });
+        setTimeout(() => {
+          setNewBallIds((prev) => {
+            const updated = new Set(prev);
+            updated.delete(payload.id);
+            return updated;
+          });
+        }, 3000);
+        return;
+      }
 
-    socket.on('createComment', (comment: CommentPayload) => {
-      const newBall: BallType = {
-        id: comment.id,
-        type: 'comment',
-        content: comment.content,
-        position: {
-          x: comment.positionX,
-          y: comment.positionY,
-          z: comment.positionZ,
-        },
-        radius: comment.radius,
-        commentsCount: 0,
-        userId: comment.userId,
-        createdAt: new Date(comment.createdAt),
-        isDeleted: false,
-        articleId: comment.articleId,
-        path: comment.path,
-        depth: comment.depth,
-      };
-
-      addBall(newBall);
-      setNewBallIds((prev) => new Set(prev).add(comment.id));
-      setTimeout(() => {
-        setNewBallIds((prev) => {
-          const updated = new Set(prev);
-          updated.delete(comment.id);
-          return updated;
-        });
-      }, 3000);
-    });
-
-    socket.on('deleteArticle', (data: { id: string }) => {
-      removeBall(data.id);
-    });
-
-    socket.on('deleteComment', (data: { id: string }) => {
-      removeBall(data.id);
-    });
-
-    socket.on('syncPlayers', (players: any[]) => {
-      console.log('[socket] syncPlayers', players);
-      syncPlayers(players);
-      refresh(); // 플레이어 목록 갱신 시 글/댓글도 새로고침
-    });
-
-    socket.on('updatePosition', (updates: PositionUpdate[]) => {
-      updates.forEach((u) => {
-        if (u.type !== 'article') return;
-        updateBall(u.id, (prev) => ({
-          ...prev,
-          position: { x: u.position.x, y: u.position.y, z: u.position.z },
-        }));
-        const body = bodiesRef.current.get(u.id);
-        if (body) {
-          body.position.x = u.position.x;
-          body.position.y = u.position.z;
-          body.velocity.x = 0;
-          body.velocity.y = 0;
-        }
-      });
-      setRenderBalls(
-        Array.from(bodiesRef.current.values()).map((body) => ({
-          ball: body.ball,
-          position: { ...body.position },
-          radius: body.radius,
-          isNew: newBallIds.has(body.ball.id),
-        }))
-      );
-    });
-
-    return () => {
-      socket.off('connect');
-      socket.off('createArticle');
-      socket.off('createComment');
-      socket.off('deleteArticle');
-      socket.off('deleteComment');
-      socket.off('updatePosition');
-      socket.off('syncPlayers');
+      refresh();
     };
-  }, [socket, addBall, removeBall, updateBall, syncPlayers]);
 
-  useEffect(() => {
-    if (!socket || !myPlayer) return;
-    const joinPayload = { ...myPlayer, socketId: socket.id };
-    setSocketAuth(joinPayload);
-    socket.emit('join', joinPayload);
-    socket.emit('requestPlayers');
-  }, [socket, myPlayer]);
-
-  // 주기적으로 플레이어 목록 요청 (네트워크/연결 문제 대비)
-  useEffect(() => {
-    if (!socket) return;
-    let attempts = 0;
-    const interval = setInterval(() => {
-      socket.emit('requestPlayers');
-      if (myPlayer) {
-        const joinPayload = { ...myPlayer, socketId: socket.id };
-        socket.emit('join', joinPayload);
-      }
-      attempts += 1;
-      if (attempts > 6) {
-        clearInterval(interval); // 30초 후 중단
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [socket, myPlayer]);
+    window.addEventListener('articles:refresh', handleRefresh);
+    return () => window.removeEventListener('articles:refresh', handleRefresh);
+  }, [addBall, refresh]);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
@@ -816,8 +712,8 @@ export function BallManager({ table, toolMode, onReadThread }: Props) {
         if (len < 1) return null;
         const nx = dirX / len; // pointer -> ball 방향 (공이 나아갈 방향)
         const ny = dirY / len;
-        const body = bodiesRef.current.get(aimState.ballId);
-        const ballRadiusPx = body ? body.radius * unit : 12;
+        const activeBall = renderBalls.find((b) => b.ball.id === aimState.ballId);
+        const ballRadiusPx = activeBall ? activeBall.radius * unit : 12;
         const cueLength = 220;
         const pullScale = Math.min(len, 18);
         const offsetBase = ballRadiusPx + 24 + pullScale * 4; // 더 멀리 당길수록 큐를 더 뒤로 이동

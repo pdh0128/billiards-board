@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 
 interface Player {
   id: string;
@@ -8,7 +8,6 @@ interface Player {
   color: string;
   joinedAt: number;
   userId?: string;
-  socketId?: string;
 }
 
 interface GameContextType {
@@ -18,7 +17,6 @@ interface GameContextType {
   isMyTurn: boolean;
   joinGame: (nickname: string, userId?: string) => void;
   nextTurn: () => void;
-  syncPlayers: (players: Player[]) => void;
   getPlayerStartPosition: (playerId: string) => { x: number; y: number; z: number };
 }
 
@@ -75,14 +73,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setMyPlayer(newPlayer);
   };
 
-  const syncPlayers = (list: Player[]) => {
-    setPlayers(list);
-    if (myPlayer) {
-      const updated = list.find((p) => p.id === myPlayer.id);
-      if (updated) setMyPlayer(updated);
-    }
-  };
-
   const nextTurn = () => {
     if (players.length === 0) return;
     setCurrentTurnIndex((prev) => (prev + 1) % players.length);
@@ -107,7 +97,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
         myPlayer,
         isMyTurn,
         joinGame,
-        syncPlayers,
         nextTurn,
         getPlayerStartPosition,
       }}

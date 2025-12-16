@@ -14,10 +14,11 @@ function summarizeVotes(grouped: Array<{ value: 'UP' | 'DOWN'; _count: { value: 
   );
 }
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const post = await prisma.post.findFirst({
-      where: { id: params.id, isDeleted: false },
+      where: { id, isDeleted: false },
       include: {
         user: { select: { id: true, username: true, uuid: true } },
       },
@@ -52,8 +53,9 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const user = await getUserFromRequest(request);
     if (!user?.id) {
       return NextResponse.json({ success: false, error: 'Login required' }, { status: 401 });
@@ -63,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const title = (body?.title ?? '').trim();
     const content = (body?.content ?? '').trim();
 
-    const existing = await prisma.post.findFirst({ where: { id: params.id } });
+    const existing = await prisma.post.findFirst({ where: { id } });
     if (!existing || existing.isDeleted) {
       return NextResponse.json({ success: false, error: 'Post not found' }, { status: 404 });
     }
@@ -72,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const updated = await prisma.post.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         title: title || existing.title,
         content: content || existing.content,
@@ -87,14 +89,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const user = await getUserFromRequest(request);
     if (!user?.id) {
       return NextResponse.json({ success: false, error: 'Login required' }, { status: 401 });
     }
 
-    const existing = await prisma.post.findUnique({ where: { id: params.id } });
+    const existing = await prisma.post.findUnique({ where: { id } });
     if (!existing || existing.isDeleted) {
       return NextResponse.json({ success: false, error: 'Post not found' }, { status: 404 });
     }
@@ -103,7 +106,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     await prisma.post.update({
-      where: { id: params.id },
+      where: { id },
       data: { isDeleted: true, deletedAt: new Date() },
     });
 

@@ -37,14 +37,22 @@ async function pruneDeletedComments(postId: string) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id?: string }> }
+) {
   try {
+    const { id: commentId } = await params;
+    if (!commentId) {
+      return NextResponse.json({ success: false, error: 'Comment id is required' }, { status: 400 });
+    }
+
     const user = await getUserFromRequest(request);
     if (!user?.id) {
       return NextResponse.json({ success: false, error: 'Login required' }, { status: 401 });
     }
 
-    const comment = await prisma.comment.findUnique({ where: { id: params.id } });
+    const comment = await prisma.comment.findFirst({ where: { id: commentId } });
     if (!comment) {
       return NextResponse.json({ success: false, error: 'Comment not found' }, { status: 404 });
     }
@@ -53,10 +61,21 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ success: false, error: '권한이 없습니다' }, { status: 403 });
     }
 
-    await prisma.comment.update({
-      where: { id: params.id },
-      data: { isDeleted: true, deletedAt: new Date() },
-    });
+    const pathPrefix = `${comment.path}.`;
+
+    await prisma.$transaction([
+      prisma.comment.updateMany({
+        where: { id: commentId },
+        data: { isDeleted: true, deletedAt: new Date() },
+      }),
+      prisma.comment.updateMany({
+        where: {
+          postId: comment.postId,
+          path: { startsWith: pathPrefix },
+        },
+        data: { isDeleted: true, deletedAt: new Date() },
+      }),
+    ]);
 
     await pruneDeletedComments(comment.postId);
 

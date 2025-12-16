@@ -13,8 +13,9 @@ function summarizeVotes(grouped: Array<{ value: 'UP' | 'DOWN'; _count: { value: 
   );
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const user = await getUserFromRequest(request);
     if (!user?.id) {
       return NextResponse.json({ success: false, error: 'Login required' }, { status: 401 });
@@ -23,15 +24,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const body = await request.json();
     const value = body?.value === 'DOWN' ? 'DOWN' : 'UP';
 
-    const post = await prisma.post.findFirst({ where: { id: params.id, isDeleted: false } });
+    const post = await prisma.post.findFirst({ where: { id, isDeleted: false } });
     if (!post) {
       return NextResponse.json({ success: false, error: 'Post not found' }, { status: 404 });
     }
 
     await prisma.vote.upsert({
-      where: { postId_userId: { postId: params.id, userId: user.id } },
+      where: { postId_userId: { postId: id, userId: user.id } },
       update: { value },
-      create: { value, postId: params.id, userId: user.id },
+      create: { value, postId: id, userId: user.id },
     });
 
     const votes = await prisma.vote.groupBy({

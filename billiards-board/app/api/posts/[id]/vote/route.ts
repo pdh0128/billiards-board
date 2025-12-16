@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const body = await request.json();
     const value = body?.value === 'DOWN' ? 'DOWN' : 'UP';
 
-    const post = await prisma.post.findUnique({ where: { id: params.id, isDeleted: false } });
+    const post = await prisma.post.findFirst({ where: { id: params.id, isDeleted: false } });
     if (!post) {
       return NextResponse.json({ success: false, error: 'Post not found' }, { status: 404 });
     }

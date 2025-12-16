@@ -41,13 +41,17 @@ useEffect(() => {
       if (!json.success) {
         throw new Error(json.error || '글을 불러오지 못했습니다');
       }
-      setState((prev) => ({
-        posts: [...prev.posts, ...json.data.posts],
-        cursor: json.data.nextCursor,
-        hasMore: json.data.hasMore,
-        loading: false,
-        error: null,
-      }));
+      setState((prev) => {
+        const existingIds = new Set(prev.posts.map((p) => p.id));
+        const newOnes = json.data.posts.filter((p: PostWithMeta) => !existingIds.has(p.id));
+        return {
+          posts: [...prev.posts, ...newOnes],
+          cursor: json.data.nextCursor,
+          hasMore: json.data.hasMore,
+          loading: false,
+          error: null,
+        };
+      });
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -117,8 +121,8 @@ useEffect(() => {
                   </div>
                 </div>
                 <div className="flex flex-col items-center gap-1 min-w-[64px]">
-                  <span className="text-emerald-400 font-bold">👍 {post.votes?.up ?? 0}</span>
-                  <span className="text-rose-400 font-bold">👎 {post.votes?.down ?? 0}</span>
+                  <span className="text-emerald-400 font-bold">개추 {post.votes?.up ?? 0}</span>
+                  <span className="text-rose-400 font-bold">비추 {post.votes?.down ?? 0}</span>
                 </div>
               </div>
             </article>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Comment } from '@prisma/client';
 import { PostWithMeta, VoteSummary } from '@/types';
 import { getAuthToken } from '@/utils/client-auth';
@@ -13,7 +14,9 @@ type DetailState = {
   error: string | null;
 };
 
-export default function PostDetail({ params }: { params: { id: string } }) {
+export default function PostDetail() {
+  const params = useParams<{ id: string }>();
+  const postId = params?.id ?? '';
   const [state, setState] = useState<DetailState>({
     post: null,
     comments: [],
@@ -27,7 +30,8 @@ export default function PostDetail({ params }: { params: { id: string } }) {
   const fetchDetail = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const res = await fetch(`/api/posts/${params.id}`, { cache: 'no-store' });
+      if (!postId) throw new Error('잘못된 경로입니다');
+      const res = await fetch(`/api/posts/${postId}`, { cache: 'no-store' });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || '글을 불러오지 못했습니다');
       setState({
@@ -44,7 +48,7 @@ export default function PostDetail({ params }: { params: { id: string } }) {
         error: err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다',
       });
     }
-  }, [params.id]);
+  }, [postId]);
 
   useEffect(() => {
     fetchDetail();
@@ -55,7 +59,8 @@ export default function PostDetail({ params }: { params: { id: string } }) {
     setVoting(true);
     try {
       const token = getAuthToken();
-      const res = await fetch(`/api/posts/${params.id}/vote`, {
+      if (!postId) throw new Error('잘못된 경로입니다');
+      const res = await fetch(`/api/posts/${postId}/vote`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +98,7 @@ export default function PostDetail({ params }: { params: { id: string } }) {
         },
         body: JSON.stringify({
           content: commentContent.trim(),
-          postId: params.id,
+          postId,
           parentPath,
         }),
       });
@@ -168,14 +173,14 @@ export default function PostDetail({ params }: { params: { id: string } }) {
               disabled={voting}
               className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-semibold disabled:opacity-50"
             >
-              👍 {post.votes?.up ?? 0}
+              개추 {post.votes?.up ?? 0}
             </button>
             <button
               onClick={() => handleVote('DOWN')}
               disabled={voting}
               className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 font-semibold disabled:opacity-50"
             >
-              👎 {post.votes?.down ?? 0}
+              비추 {post.votes?.down ?? 0}
             </button>
           </div>
         </article>

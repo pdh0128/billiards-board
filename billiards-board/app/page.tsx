@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { animate, stagger } from 'animejs';
 import Link from 'next/link';
 import { PostWithMeta } from '@/types';
 
@@ -73,6 +74,28 @@ useEffect(() => {
   }, [loadMore]);
 
   useEffect(() => {
+    // Hero 영역 부드러운 진입
+    animate('.page-hero', {
+      opacity: [0, 1],
+      translateY: [-12, 0],
+      easing: 'easeOutQuad',
+      duration: 600,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (state.posts.length === 0) return;
+    // 카드 리스트 페이드/슬라이드 인
+    animate('.post-card', {
+      opacity: [0, 1],
+      translateY: [24, 0],
+      easing: 'easeOutQuad',
+      duration: 500,
+      delay: stagger(50),
+    });
+  }, [state.posts]);
+
+  useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(
@@ -90,7 +113,7 @@ useEffect(() => {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <header className="flex items-center justify-between mb-10">
+        <header className="flex items-center justify-between mb-10 page-hero">
           <div>
             <h1 className="text-3xl font-bold">투표 게시판</h1>
             <p className="text-sm text-slate-400 mt-1">커서 기반 무한 스크롤 + Path Model 댓글</p>
@@ -114,7 +137,10 @@ useEffect(() => {
 
         <div className="space-y-4">
           {state.posts.map((post) => (
-            <article key={post.id} className="bg-slate-900/70 border border-slate-800 rounded-xl p-5 shadow-lg">
+            <article
+              key={post.id}
+              className="bg-slate-900/70 border border-slate-800 rounded-xl p-5 shadow-lg post-card"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <Link href={`/posts/${post.id}`} className="text-xl font-semibold hover:text-emerald-400">

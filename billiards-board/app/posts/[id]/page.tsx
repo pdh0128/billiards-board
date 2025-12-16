@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { Comment } from '@prisma/client';
 import { CommentWithUser, PostWithMeta, VoteSummary } from '@/types';
 import { getAuthToken } from '@/utils/client-auth';
+import { animate, stagger } from 'animejs';
 
 type DetailState = {
   post: PostWithMeta | null;
@@ -68,6 +69,23 @@ export default function PostDetail() {
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
+
+  useEffect(() => {
+    if (!state.post) return;
+    animate('.detail-card', {
+      opacity: [0, 1],
+      translateY: [-8, 0],
+      easing: 'easeOutQuad',
+      duration: 550,
+    });
+    animate('.comment-item', {
+      opacity: [0, 1],
+      translateY: [12, 0],
+      easing: 'easeOutQuad',
+      duration: 450,
+      delay: stagger(30),
+    });
+  }, [state.post, state.comments]);
 
   const handleVote = async (value: 'UP' | 'DOWN') => {
     if (voting) return;
@@ -174,7 +192,7 @@ export default function PostDetail() {
           ← 목록으로
         </Link>
 
-        <article className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-lg">
+        <article className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-lg detail-card">
           <h1 className="text-3xl font-bold">{post.title}</h1>
           <div className="text-sm text-slate-400 mt-2 flex gap-3">
             <span>작성자: {post.user?.username ?? '익명'}</span>
@@ -231,7 +249,7 @@ export default function PostDetail() {
             {tree.map((comment) => (
               <div
                 key={comment.id}
-                className="bg-slate-900/60 border border-slate-800 rounded-xl p-3"
+                className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 comment-item"
                 style={{ marginLeft: Math.min(comment.depth * 16, 120) }}
               >
                 <div className="text-xs text-slate-400 flex justify-between">

@@ -28,9 +28,24 @@ export default function PostDetail() {
   const [voting, setVoting] = useState(false);
 
   const fetchDetail = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    if (!postId) {
+      setState({
+        post: null,
+        comments: [],
+        loading: false,
+        error: '잘못된 경로입니다',
+      });
+      return;
+    }
+
+    setState({
+      post: null,
+      comments: [],
+      loading: true,
+      error: null,
+    });
+
     try {
-      if (!postId) throw new Error('잘못된 경로입니다');
       const res = await fetch(`/api/posts/${postId}`, { cache: 'no-store' });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || '글을 불러오지 못했습니다');

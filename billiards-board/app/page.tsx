@@ -42,10 +42,17 @@ useEffect(() => {
         throw new Error(json.error || '글을 불러오지 못했습니다');
       }
       setState((prev) => {
-        const existingIds = new Set(prev.posts.map((p) => p.id));
-        const newOnes = json.data.posts.filter((p: PostWithMeta) => !existingIds.has(p.id));
+        const merged = [...prev.posts];
+        json.data.posts.forEach((p: PostWithMeta) => {
+          const idx = merged.findIndex((m) => m.id === p.id);
+          if (idx >= 0) {
+            merged[idx] = p; // 최신 데이터로 덮어씌우기 (투표 수 등 반영)
+          } else {
+            merged.push(p);
+          }
+        });
         return {
-          posts: [...prev.posts, ...newOnes],
+          posts: merged,
           cursor: json.data.nextCursor,
           hasMore: json.data.hasMore,
           loading: false,

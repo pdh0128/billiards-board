@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-jwt';
@@ -29,14 +31,14 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     }
 
     const comments = await prisma.comment.findMany({
-      where: { postId: params.id },
+      where: { postId: id },
       orderBy: { path: 'asc' },
     });
 
     const votes = await prisma.vote.groupBy({
       by: ['value'],
       _count: { value: true },
-      where: { postId: params.id },
+      where: { postId: id },
     });
 
     return NextResponse.json({

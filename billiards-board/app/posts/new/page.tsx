@@ -34,7 +34,8 @@ export default function NewPostPage() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || '작성에 실패했습니다');
-      router.push(`/posts/${json.data.id}`);
+      // 작성 후 메인 목록으로 이동
+      router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : '작성에 실패했습니다');
     } finally {

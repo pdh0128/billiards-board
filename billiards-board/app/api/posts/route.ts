@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-jwt';
 
 type VoteSummary = Record<string, { up: number; down: number }>;
@@ -71,6 +71,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Debug: ensure prisma has post model
+    if (!('post' in prisma)) {
+      console.error('Prisma client missing post model. Available keys:', Object.keys(prisma));
+    }
     const user = await getUserFromRequest(request);
     if (!user?.id) {
       return NextResponse.json({ success: false, error: 'Login required' }, { status: 401 });

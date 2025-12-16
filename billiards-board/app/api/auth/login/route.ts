@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pbkdf2Sync } from 'crypto';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { signJwt } from '@/lib/jwt';
 
 const EXPIRES_IN = 24 * 60 * 60; // 24h

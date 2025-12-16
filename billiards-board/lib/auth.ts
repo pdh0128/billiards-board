@@ -24,7 +24,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.userId = user.id;
-        token.uuid = (user as any).uuid;
+        const withUuid = user as { uuid?: string };
+        if (withUuid.uuid) {
+          token.uuid = withUuid.uuid;
+        }
       }
       return token;
     },

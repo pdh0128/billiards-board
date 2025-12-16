@@ -19,12 +19,12 @@ function base64UrlDecode(input: string) {
 interface JwtPayload {
   sub: string;
   exp: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 const ALGO = 'HS256';
 
-export function signJwt(payload: Record<string, any>, expiresInSeconds: number) {
+export function signJwt(payload: Record<string, unknown>, expiresInSeconds: number) {
   const secret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
   if (!secret) throw new Error('JWT_SECRET not configured');
 

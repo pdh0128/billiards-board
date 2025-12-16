@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient } = require('@prisma/client');
 
 // Mirror the TypeScript prisma singleton in CJS for server.js (node runs without TS transpilation)

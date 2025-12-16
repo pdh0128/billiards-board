@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = signJwt({ sub: user.id, username: user.username }, EXPIRES_IN);
-    const { passwordHash, ...safeUser } = user;
+    const safeUser = { id: user.id, username: user.username, uuid: user.uuid };
 
     return NextResponse.json(
       { success: true, data: { user: safeUser, token, expiresIn: EXPIRES_IN } },

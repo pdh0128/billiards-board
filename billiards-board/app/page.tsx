@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { animate, stagger } from 'animejs';
 import Link from 'next/link';
 import { PostWithMeta } from '@/types';
+import Post3DGallery from '@/components/post-3d-gallery';
 
 type FetchState = {
   posts: PostWithMeta[];
@@ -14,19 +15,19 @@ type FetchState = {
 };
 
 export default function Home() {
-const [state, setState] = useState<FetchState>({
-  posts: [],
-  cursor: null,
-  hasMore: true,
-  loading: false,
-  error: null,
-});
-const sentinelRef = useRef<HTMLDivElement | null>(null);
-const stateRef = useRef(state);
+  const [state, setState] = useState<FetchState>({
+    posts: [],
+    cursor: null,
+    hasMore: true,
+    loading: false,
+    error: null,
+  });
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const stateRef = useRef(state);
 
-useEffect(() => {
-  stateRef.current = state;
-}, [state]);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const loadMore = useCallback(async () => {
     const snapshot = stateRef.current;
@@ -112,8 +113,8 @@ useEffect(() => {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <div className="max-w-4xl mx-auto px-4 py-10">
-        <header className="flex items-center justify-between mb-10 page-hero">
+      <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
+        <header className="flex items-center justify-between page-hero">
           <div>
             <h1 className="text-3xl font-bold">투표 게시판</h1>
             <p className="text-sm text-slate-400 mt-1">커서 기반 무한 스크롤 + Path Model 댓글</p>
@@ -126,7 +127,20 @@ useEffect(() => {
           </Link>
         </header>
 
-        <div className="flex justify-end mb-6">
+        <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm text-slate-300">3D 카드 클라우드</p>
+              <p className="text-xs text-slate-500 mt-1">글을 작은 입체 카드로 배치했어요. 돌려보며 둘러보세요.</p>
+            </div>
+            <div className="text-xs text-slate-400">
+              <span>Hover → 확대 · Auto-rotate</span>
+            </div>
+          </div>
+          <Post3DGallery posts={state.posts} />
+        </section>
+
+        <div className="flex justify-end">
           <Link
             href="/posts/new"
             className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow"

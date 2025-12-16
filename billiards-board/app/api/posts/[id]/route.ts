@@ -33,6 +33,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     const comments = await prisma.comment.findMany({
       where: { postId: id },
       orderBy: { path: 'asc' },
+      include: { user: { select: { id: true, username: true } } },
     });
 
     const votes = await prisma.vote.groupBy({

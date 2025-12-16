@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Comment } from '@prisma/client';
-import { PostWithMeta, VoteSummary } from '@/types';
+import { CommentWithUser, PostWithMeta, VoteSummary } from '@/types';
 import { getAuthToken } from '@/utils/client-auth';
 
 type DetailState = {
@@ -147,7 +147,7 @@ export default function PostDetail() {
 
   const tree = useMemo(() => {
     const sorted = [...state.comments].sort((a, b) => a.path.localeCompare(b.path));
-    return sorted;
+    return sorted as CommentWithUser[];
   }, [state.comments]);
 
   if (state.loading) {
@@ -235,7 +235,7 @@ export default function PostDetail() {
                 style={{ marginLeft: Math.min(comment.depth * 16, 120) }}
               >
                 <div className="text-xs text-slate-400 flex justify-between">
-                  <span>depth {comment.depth}</span>
+                  <span>{comment.user?.username ?? '익명'}</span>
                   {!comment.isDeleted && (
                     <div className="flex gap-2">
                       <button

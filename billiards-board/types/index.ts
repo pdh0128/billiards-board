@@ -12,7 +12,7 @@ export interface PostWithMeta extends Post {
 }
 
 export interface CommentWithUser extends Comment {
-  user?: User;
+  user?: Pick<User, 'id' | 'username' | 'uuid'>;
 }
 
 export interface ApiResponse<T> {

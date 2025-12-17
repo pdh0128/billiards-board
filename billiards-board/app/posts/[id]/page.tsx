@@ -30,6 +30,8 @@ export default function PostDetail() {
   const [voting, setVoting] = useState(false);
   const [showCommentForm, setShowCommentForm] = useState(false);
   const formRef = useRef<HTMLDivElement | null>(null);
+  const voteFxRootRef = useRef<HTMLDivElement | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const fetchDetail = useCallback(async () => {
     if (!postId) {
@@ -74,6 +76,32 @@ export default function PostDetail() {
   }, [fetchDetail]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.createElement('div');
+    Object.assign(root.style, {
+      position: 'fixed',
+      inset: '0',
+      pointerEvents: 'none',
+      overflow: 'hidden',
+      zIndex: '99',
+    });
+    document.body.appendChild(root);
+    voteFxRootRef.current = root;
+    return () => {
+      document.body.removeChild(root);
+      voteFxRootRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: PointerEvent) => {
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('pointerdown', handler);
+    return () => window.removeEventListener('pointerdown', handler);
+  }, []);
+
+  useEffect(() => {
     if (!state.post) return;
     animate('.detail-card', {
       opacity: [0, 1],
@@ -89,6 +117,111 @@ export default function PostDetail() {
       delay: stagger(30),
     });
   }, [state.post, state.comments]);
+
+  const triggerVoteFx = useCallback((type: 'UP' | 'DOWN') => {
+    if (typeof window === 'undefined') return;
+    const root = voteFxRootRef.current;
+    if (!root) return;
+    const colors = type === 'UP' ? ['#22c55e', '#34d399', '#22d3ee'] : ['#f43f5e', '#fb7185', '#f59e0b'];
+    const pointer = lastPointerRef.current;
+    const cx = pointer?.x ?? window.innerWidth / 2;
+    const cy = pointer?.y ?? window.innerHeight / 2;
+
+    const container = document.createElement('div');
+    Object.assign(container.style, {
+      position: 'absolute',
+      inset: '0',
+      pointerEvents: 'none',
+    });
+    root.appendChild(container);
+
+    const particles: HTMLSpanElement[] = [];
+    for (let i = 0; i < 140; i += 1) {
+      const el = document.createElement('span');
+      const size = 8 + Math.random() * 14;
+      Object.assign(el.style, {
+        position: 'absolute',
+        top: `${cy}px`,
+        left: `${cx}px`,
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '9999px',
+        background: colors[i % colors.length],
+        filter: 'blur(1px)',
+      });
+      particles.push(el);
+      container.appendChild(el);
+    }
+
+    const beams: HTMLDivElement[] = [];
+    for (let i = 0; i < 24; i += 1) {
+      const beam = document.createElement('div');
+      Object.assign(beam.style, {
+        position: 'absolute',
+        top: `${cy - 2}px`,
+        left: `${cx - 60}px`,
+        width: '120px',
+        height: '4px',
+        borderRadius: '9999px',
+        background: colors[i % colors.length],
+        opacity: '0.9',
+      });
+      beams.push(beam);
+      container.appendChild(beam);
+    }
+
+    const ring = document.createElement('div');
+    Object.assign(ring.style, {
+      position: 'absolute',
+      top: `${cy - 90}px`,
+      left: `${cx - 90}px`,
+      width: '180px',
+      height: '180px',
+      borderRadius: '50%',
+      border: `2px solid ${colors[0]}`,
+      opacity: '0.7',
+    });
+    container.appendChild(ring);
+
+    requestAnimationFrame(() => {
+      animate(particles, {
+        translateX: () => (Math.random() - 0.5) * 1040,
+        translateY: () => (Math.random() - 0.9) * 1120,
+        scale: [0.5, 3],
+        rotate: () => Math.random() * 360,
+        opacity: [1, 0],
+        easing: 'easeOutExpo',
+        duration: 1500,
+        delay: stagger(3),
+        complete: () => container.remove(),
+      });
+
+      animate(beams, {
+        rotate: (_, i) => (360 / beams.length) * i,
+        scaleX: [0.6, 3.6],
+        opacity: [1, 0],
+        easing: 'easeOutExpo',
+        duration: 1100,
+      });
+
+      animate(ring, {
+        scale: [0.8, 4.2],
+        opacity: [1, 0],
+        easing: 'easeOutQuad',
+        duration: 1300,
+      });
+
+      animate(container, {
+        background: ['rgba(15,23,42,0.0)', 'rgba(15,23,42,0.5)', 'rgba(15,23,42,0.0)'],
+        duration: 600,
+        easing: 'easeOutQuad',
+      });
+    });
+
+    window.setTimeout(() => {
+      if (root.contains(container)) root.removeChild(container);
+    }, 1900);
+  }, []);
 
   const handleVote = async (value: 'UP' | 'DOWN') => {
     if (voting) return;
@@ -114,6 +247,7 @@ export default function PostDetail() {
             }
           : prev
       );
+      triggerVoteFx(value);
     } catch (err) {
       alert(err instanceof Error ? err.message : '투표에 실패했습니다');
     } finally {
